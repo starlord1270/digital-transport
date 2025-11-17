@@ -4,172 +4,91 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Digital Transport - Iniciar Sesión</title>
-    
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-
-        .login-container {
-            background: #fff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
-
-        h1 {
-            color: #0056b3;
-            margin-bottom: 5px;
-        }
-
-        h2 {
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 1.2em;
-        }
-
-        .input-group {
-            margin-bottom: 15px;
-            text-align: left;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #555;
-        }
-
-        input[type="email"],
-        input[type="password"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box; 
-        }
-
-        button {
-            width: 100%;
-            padding: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1em;
-            transition: background-color 0.3s;
-        }
-
-        button:hover {
-            background-color: #0056b3;
-        }
-
-        #message {
-            margin-top: 20px;
-            padding: 10px;
-            border-radius: 4px;
-            display: none;
-        }
-
-        #message.error {
-            background-color: #fdd;
-            color: #d00;
-            display: block;
-        }
-
-        #message.success {
-            background-color: #ddf;
-            color: #00d;
-            display: block;
-        }
-        .hidden {
-            display: none !important;
-        }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-container { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); width: 100%; max-width: 400px; text-align: center; }
+        h2 { color: #0056b3; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        input[type="email"], input[type="password"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn-login { background-color: #28a745; color: white; padding: 10px; border: none; border-radius: 4px; cursor: pointer; width: 100%; transition: background-color 0.3s; }
+        .btn-login:hover { background-color: #218838; }
+        #message { margin-top: 20px; padding: 10px; border-radius: 4px; text-align: center; font-weight: bold; display: none; }
+        .registro-link { margin-top: 15px; font-size: 0.9em; }
     </style>
 </head>
 <body>
     <div class="login-container">
-        <h1>Digital Transport</h1>
         <h2>Iniciar Sesión</h2>
-
-        <form id="loginForm">
-            <div class="input-group">
+        
+        <form id="loginForm"> 
+            <div class="form-group">
                 <label for="email">Email:</label>
-                <input type="email" id="email" required>
+                <input type="email" id="email" name="email" required>
             </div>
-            <div class="input-group">
+            <div class="form-group">
                 <label for="password">Contraseña:</label>
-                <input type="password" id="password" required>
+                <input type="password" id="password" name="password" required>
             </div>
-            <button type="submit">Acceder al Sistema</button>
+            
+            <button type="submit" class="btn-login" id="btnLogin">Ingresar</button>
         </form>
 
-        <p id="message" class="hidden"></p>
+        <div id="message"></div>
+        
+        <p class="registro-link">
+            ¿No tienes cuenta? <a href="registro-lineas.php">Regístrate aquí</a>
+        </p>
     </div>
 
     <script>
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            // 1. URL del script PHP de backend
-            // ESTA ES LA RUTA CORREGIDA: http://localhost/NOMBRE_PROYECTO/backend/login.php
-            const API_URL = 'http://localhost/Competencia-Analisis/backend/login.php';
-            
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('loginForm');
             const messageElement = document.getElementById('message');
 
-            // Función para mostrar mensajes
-            function showMessage(text, isError = true) {
-                messageElement.textContent = text;
-                messageElement.className = isError ? 'error' : 'success';
-            }
-            
-            // Ocultar mensaje al inicio de cada intento
-            messageElement.className = 'hidden';
+            form.addEventListener('submit', function(e) {
+                e.preventDefault(); // Evitar el envío de formulario tradicional
+                
+                // Ruta al script de validación de backend
+                // Estructura: frontend/inicio-sesion-linea-choferes/ -> ../../backend/
+                const targetUrl = '../../backend/validacion-login.php'; 
 
-            // 2. Enviar datos al servidor
-            fetch(API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ email: email, password: password })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    // Este error se lanza si el servidor no responde (ej. 404 Not Found)
-                    throw new Error('Error de red o servidor: ' + response.statusText);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    // Éxito en el Login (respuesta positiva del login.php)
-                    showMessage('Bienvenido, ' + data.user.nombre + '. ¡Acceso concedido!', false);
-                    console.log('Datos del usuario:', data.user);
-                    
-                    // Lógica de redirección a la página del dashboard aquí
-                    // window.location.href = '/Competencia-Analisis/dashboard.html'; 
-                } else {
-                    // Error de credenciales (respuesta de login.php)
-                    showMessage(data.error || 'Fallo en el inicio de sesión.');
-                }
-            })
-            .catch(error => {
-                // Error de conexión (ej. servidor XAMPP apagado, ruta incorrecta, CORS)
-                console.error('Error de conexión:', error);
-                showMessage('No se pudo conectar al servidor. Verifique que XAMPP/WAMP esté activo y que la ruta del API sea correcta.', true);
+                // Mostrar estado de carga
+                messageElement.style.display = 'block';
+                messageElement.style.backgroundColor = '#ffffcc';
+                messageElement.style.color = '#333';
+                messageElement.textContent = 'Verificando credenciales...';
+
+                const formData = new FormData(form);
+
+                fetch(targetUrl, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    messageElement.textContent = data.message;
+
+                    if (data.success) {
+                        messageElement.style.backgroundColor = '#d4edda'; // Éxito
+                        messageElement.style.color = '#155724';
+                        
+                        // Redirigir al usuario a la interfaz correcta
+                        setTimeout(() => {
+                            window.location.href = data.redirect; // La URL la enviará el PHP
+                        }, 1000); 
+
+                    } else {
+                        messageElement.style.backgroundColor = '#f8d7da'; // Error
+                        messageElement.style.color = '#721c24';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error de comunicación:', error);
+                    messageElement.textContent = 'Error de red. Intente de nuevo.';
+                    messageElement.style.backgroundColor = '#f8d7da';
+                    messageElement.style.color = '#721c24';
+                });
             });
         });
     </script>

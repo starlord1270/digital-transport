@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Digital Transport - Registro de Usuarios (DEBUG)</title>
+    <title>Digital Transport - Registro de Usuarios</title>
     
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
@@ -19,6 +19,8 @@
         .btn-success { background-color: #28a745; color: white; }
         .hidden { display: none !important; }
         .debug-id-label { position: absolute; top: -10px; right: 5px; background: orange; color: white; padding: 2px 5px; border-radius: 3px; font-size: 0.7em; }
+        /* Estilos para el mensaje de estado */
+        #message { margin-top: 20px; padding: 10px; border-radius: 4px; text-align: center; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -26,8 +28,7 @@
         <h1>Digital Transport</h1>
         <h2>Registro de Nuevo Usuario</h2>
 
-        <form id="registroForm" action="/Competencia-Analisis/backend/validacion-registro.php" method="POST">
-    </form>
+        <form id="registroForm">
             
             <label>Selecciona tu Rol:</label>
             <div class="btn-group">
@@ -41,130 +42,176 @@
                 </button>
             </div>
 
-            <div class="form-group" style="border: 1px dashed red; padding: 10px;">
-                <label for="tipo_usuario_id" style="color: red; font-weight: bold;">ID de Tipo de Usuario (DEBUG):</label>
-                <input type="text" name="tipo_usuario_id" id="tipo_usuario_id" value="4" readonly> 
-            </div>
+            <input type="hidden" name="tipo_usuario_id" id="tipo_usuario_id" value="4"> 
             
             <div class="form-group">
                 <label for="nombre_completo">Nombre Completo:</label>
-                <input type="text" id="nombre_completo" name="nombre_completo" required>
+                <input type="text" id="nombre_completo" name="nombre_completo" placeholder="Ej: Juan Pérez Morales" required>
             </div>
             <div class="form-group">
                 <label for="documento_identidad">Documento de Identidad:</label>
-                <input type="text" id="documento_identidad" name="documento_identidad" required>
+                <input type="text" id="documento_identidad" name="documento_identidad" placeholder="Ej: 8976543 (Cédula de Identidad)" required>
             </div>
             <div class="form-group">
                 <label for="email">Email:</label>
-                <input type="email" id="email" name="email" required>
+                <input type="email" id="email" name="email" placeholder="Ej: juan.perez@lineaX.com" required>
             </div>
             <div class="form-group">
                 <label for="password">Contraseña:</label>
-                <input type="password" id="password" name="password" required>
+                <input type="password" id="password" name="password" placeholder="Mínimo 8 caracteres" required>
             </div>
 
             <div id="adminFields">
                 <div class="form-group">
                     <label for="cargo">Cargo/Puesto:</label>
-                    <input type="text" id="cargo" name="cargo" required>
+                    <input type="text" id="cargo" name="cargo" placeholder="Ej: Gerente de Operaciones" required>
                 </div>
                 <div class="form-group">
                     <label for="linea_id_admin">ID de Línea/Ruta:</label>
-                    <input type="text" id="linea_id_admin" name="linea_id" required>
+                    <input type="text" id="linea_id_admin" name="linea_id" placeholder="Ej: 1 (ID de la tabla LINEA)" required>
                 </div>
             </div>
 
             <div id="choferFields" class="hidden">
                 <div class="form-group">
                     <label for="licencia">Número de Licencia:</label>
-                    <input type="text" id="licencia" name="licencia" required disabled>
+                    <input type="text" id="licencia" name="licencia_disabled" placeholder="Ej: 456789 B" required disabled>
+                </div>
+                <div class="form-group">
+                    <label for="vehiculo_placa">Placa del Vehículo:</label>
+                    <input type="text" id="vehiculo_placa" name="vehiculo_placa_disabled" placeholder="Ej: 2568-XYZ" required disabled> 
                 </div>
                 <div class="form-group">
                     <label for="linea_id_chofer">ID de Línea Asignada:</label>
-                    <input type="text" id="linea_id_chofer" name="linea_id_chofer_input" required disabled> 
+                    <input type="text" id="linea_id_chofer" name="linea_id_chofer_input_disabled" placeholder="Ej: 1 (ID de la tabla LINEA)" required disabled> 
                 </div>
             </div>
             
             <button type="submit" class="btn btn-success" id="btnRegistrar">Registrar</button>
         </form>
 
-        <p id="message" class="hidden">Mensaje de estado</p>
+        <p id="message" class="hidden"></p>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Variables de Elementos y Constantes
             const btnChofer = document.getElementById('btnChofer');
             const btnAdmin = document.getElementById('btnAdmin');
             const inputTipoUsuarioId = document.getElementById('tipo_usuario_id');
             const adminFields = document.getElementById('adminFields');
             const choferFields = document.getElementById('choferFields');
-            
-            // Campos específicos
             const cargoInput = document.getElementById('cargo');
             const lineaAdminInput = document.getElementById('linea_id_admin');
             const licenciaInput = document.getElementById('licencia');
+            const vehiculoPlacaInput = document.getElementById('vehiculo_placa'); 
             const lineaChoferInput = document.getElementById('linea_id_chofer');
+            const ROLE_CHOFER = 3;
+            const ROLE_ADMIN = 4;
+            const form = document.getElementById('registroForm');
+            const messageElement = document.getElementById('message');
 
-            // Función para alternar la selección y campos
+            // Función para alternar los campos de Chofer/Admin
             function setRole(roleId) {
-                // 1. ACTUALIZAR EL CAMPO TIPO_USUARIO_ID (VISIBILIDAD)
                 inputTipoUsuarioId.value = roleId;
 
-                if (roleId === 4) { // ADMIN_LINEA (ID 4)
-                    // Estilos
+                if (roleId === ROLE_ADMIN) { 
                     btnAdmin.classList.add('btn-success');
                     btnAdmin.classList.remove('btn-secondary');
                     btnChofer.classList.remove('btn-success');
                     btnChofer.classList.add('btn-secondary');
 
-                    // Visibilidad y obligatoriedad para ADMIN
                     adminFields.classList.remove('hidden');
                     cargoInput.removeAttribute('disabled');
                     lineaAdminInput.removeAttribute('disabled');
+                    lineaAdminInput.name = 'linea_id';
+                    cargoInput.name = 'cargo';
                     
-                    // Ocultar y deshabilitar CHOFER
                     choferFields.classList.add('hidden');
                     licenciaInput.setAttribute('disabled', 'disabled');
+                    vehiculoPlacaInput.setAttribute('disabled', 'disabled'); 
                     lineaChoferInput.setAttribute('disabled', 'disabled');
-                    // IMPORTANTE: Asegurar que solo el campo de línea de Admin envíe 'linea_id'
-                    lineaAdminInput.name = 'linea_id';
                     lineaChoferInput.name = 'linea_id_chofer_input_disabled';
-
-
-                } else if (roleId === 3) { // CHOFER (ID 3)
-                    // Estilos
+                    licenciaInput.name = 'licencia_disabled'; 
+                    vehiculoPlacaInput.name = 'vehiculo_placa_disabled'; 
+                } else if (roleId === ROLE_CHOFER) {
                     btnChofer.classList.add('btn-success');
                     btnChofer.classList.remove('btn-secondary');
                     btnAdmin.classList.remove('btn-success');
                     btnAdmin.classList.add('btn-secondary');
                     
-                    // Visibilidad y obligatoriedad para CHOFER
                     choferFields.classList.remove('hidden');
                     licenciaInput.removeAttribute('disabled');
+                    vehiculoPlacaInput.removeAttribute('disabled'); 
                     lineaChoferInput.removeAttribute('disabled');
+                    lineaChoferInput.name = 'linea_id';
+                    licenciaInput.name = 'licencia';
+                    vehiculoPlacaInput.name = 'vehiculo_placa';
 
-                    // Ocultar y deshabilitar ADMIN
                     adminFields.classList.add('hidden');
                     cargoInput.setAttribute('disabled', 'disabled');
                     lineaAdminInput.setAttribute('disabled', 'disabled');
-                    // IMPORTANTE: Asegurar que solo el campo de línea de Chofer envíe 'linea_id'
-                    lineaChoferInput.name = 'linea_id';
                     lineaAdminInput.name = 'linea_id_admin_input_disabled'; 
+                    cargoInput.name = 'cargo_disabled';
                 }
             }
 
-            // Inicializar el formulario como Admin. Línea (ID 4)
-            setRole(4);
-
-            // Escuchadores de eventos para los botones
-            btnAdmin.addEventListener('click', function(e) {
+            // Inicialización y Listeners de Rol
+            setRole(ROLE_ADMIN);
+            btnAdmin.addEventListener('click', function(e) { e.preventDefault(); setRole(ROLE_ADMIN); });
+            btnChofer.addEventListener('click', function(e) { e.preventDefault(); setRole(ROLE_CHOFER); });
+            
+            
+            // =======================================================
+            // === MANEJO DE ENVÍO ASÍNCRONO DEL FORMULARIO (AJAX) ===
+            // =======================================================
+            form.addEventListener('submit', function(e) {
                 e.preventDefault(); 
-                setRole(4);
-            });
 
-            btnChofer.addEventListener('click', function(e) {
-                e.preventDefault(); 
-                setRole(3);
+                // RUTA HACIA EL BACKEND (subir dos carpetas desde el archivo actual)
+                const targetUrl = '../../backend/validacion-registro.php'; 
+
+                // Mostrar estado de carga
+                messageElement.classList.remove('hidden');
+                messageElement.style.backgroundColor = '#ffffcc';
+                messageElement.style.color = '#333';
+                messageElement.textContent = 'Procesando registro...';
+
+                const formData = new FormData(form);
+
+                fetch(targetUrl, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    return response.json(); 
+                })
+                .then(data => {
+                    // Mostrar el mensaje devuelto por el PHP
+                    messageElement.textContent = data.message;
+
+                    if (data.success) {
+                        messageElement.style.backgroundColor = '#d4edda'; 
+                        messageElement.style.color = '#155724';
+                        
+                        // 🔑 CAMBIO CLAVE: Redirige a login.php, ya que está en la misma carpeta
+                        setTimeout(() => {
+                            window.location.href = 'login.php'; 
+                        }, 2000); 
+
+                    } else {
+                        // En caso de error
+                        messageElement.style.backgroundColor = '#f8d7da'; 
+                        messageElement.style.color = '#721c24';
+                    }
+                })
+                .catch(error => {
+                    // Manejar errores de red/servidor
+                    console.error('Error de comunicación con el servidor:', error);
+                    messageElement.textContent = 'Error de red. Asegúrese de que el servidor Apache esté activo.';
+                    messageElement.style.backgroundColor = '#f8d7da';
+                    messageElement.style.color = '#721c24';
+                });
             });
             
         });

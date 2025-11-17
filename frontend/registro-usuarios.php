@@ -2,95 +2,75 @@
 /**
  * Archivo: registro_usuario.php
  * Descripción: Script unificado que maneja la vista de registro (HTML/CSS) y 
- * la lógica de inserción de datos a la BD para pasajeros (Estudiante, Adulto, Adulto Mayor).
+ * la lógica de inserción de datos a la BD.
  */
 
-// 1. CONFIGURACIÓN DE LA BASE DE DATOS (PDO)
-$dbHost = 'localhost';
-$dbName = 'digital-transport'; 
-$dbUser = 'root'; 
-$dbPass = ''; 
+// 1. INCLUIR CONEXIÓN A LA BASE DE DATOS
+// Asegúrate de que 'db_connection.php' esté en el mismo directorio
+require_once '../backend/bd.php'; // Sube un nivel (..) y entra en la carpeta backend/
 
-try {
-    $pdo = new PDO("mysql:host=$dbHost;dbname=$dbName;charset=utf8", $dbUser, $dbPass);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); 
-} catch (PDOException $e) {
-    // En caso de error de conexión, el mensaje se muestra en la página
-    $message = '<div class="alert error">Error de conexión a la base de datos.</div>';
-    // Se salta el procesamiento POST si la conexión falla.
-}
-
-// Definición de Tipos de Usuario
-$TIPO_USUARIO_ESTUDIANTE = 2;       // Mapea a 'student'
-$TIPO_USUARIO_ADULTO = 5;           // Mapea a 'adulto' / 'standard'
-$TIPO_USUARIO_ADULTO_MAYOR = 6;     // Mapea a 'senior'
-
+// Definición de Tipos de Usuario (Asumiendo que ya existen en la tabla TIPO_USUARIO)
+$TIPO_USUARIO_ESTANDAR = 1;
+$TIPO_USUARIO_ESTUDIANTE = 2;
 $message = ''; // Variable para almacenar mensajes de éxito o error
 
 // ----------------------------------------------------
 // 2. LÓGICA DE PROCESAMIENTO DEL FORMULARIO (PHP)
 // ----------------------------------------------------
 
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($pdo)) {
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     // Recolección y saneamiento de datos
     $full_name = trim($_POST['full_name'] ?? '');
     $doc_id = trim($_POST['doc_id'] ?? '');
     $email = trim($_POST['email'] ?? '');
-    // Asumiendo que el campo 'phone' no es obligatorio en la BD, se deja opcional aquí
-    $phone = trim($_POST['phone'] ?? null); 
+    $phone = trim($_POST['phone'] ?? '');
     $password_raw = $_POST['password'] ?? '';
     $password_confirm = $_POST['password-confirm'] ?? '';
-    $account_type = trim($_POST['account_type'] ?? 'adulto'); // Default al tipo adulto
+    $account_type = trim($_POST['account_type'] ?? 'standard');
     
     // 2.1. Validación de campos requeridos y contraseñas
-    if (empty($full_name) || empty($doc_id) || empty($email) || empty($password_raw) || empty($password_confirm)) {
+    if (empty($full_name) || empty($doc_id) || empty($email) || empty($phone) || empty($password_raw) || empty($password_confirm)) {
         $message = '<div class="alert error">Error: Faltan campos obligatorios.</div>';
     } elseif ($password_raw !== $password_confirm) {
         $message = '<div class="alert error">Error: Las contraseñas no coinciden.</div>';
     } else {
-        
-        // Determinar el ID de tipo de usuario según la selección del card
-        switch ($account_type) {
-            case 'student':
-                $tipo_usuario_id = $TIPO_USUARIO_ESTUDIANTE;
-                break;
-            case 'senior':
-                $tipo_usuario_id = $TIPO_USUARIO_ADULTO_MAYOR;
-                break;
-            default: // adulto o cualquier otro
-                $tipo_usuario_id = $TIPO_USUARIO_ADULTO;
-                break;
-        }
-        
+        // Determinar el ID de tipo de usuario
+        $tipo_usuario_id = ($account_type === 'student') ? $TIPO_USUARIO_ESTUDIANTE : $TIPO_USUARIO_ESTANDAR;
         $password_hash = password_hash($password_raw, PASSWORD_DEFAULT);
         
         // 2.2. Verificación de duplicados (Email o Documento)
-        $stmt = $pdo->prepare("SELECT usuario_id FROM USUARIO WHERE email = ? OR documento_identidad = ?");
-        $stmt->execute([$email, $doc_id]);
+        $stmt = $conn->prepare("SELECT usuario_id FROM USUARIO WHERE email = ? OR documento_identidad = ?");
+        $stmt->bind_param("ss", $email, $doc_id);
+        $stmt->execute();
+        $stmt->store_result();
         
-        if ($stmt->rowCount() > 0) {
+        if ($stmt->num_rows > 0) {
             $message = '<div class="alert error">Error: El correo electrónico o el Documento de Identidad ya están registrados.</div>';
+            $stmt->close();
         } else {
+            $stmt->close();
 
-            // 2.3. Inserción en la tabla USUARIO (saldo inicial 0.00)
-            // Se asume que la columna 'telefono' existe en la BD
-            $sql = "INSERT INTO USUARIO (tipo_usuario_id, documento_identidad, nombre_completo, email, telefono, password_hash, fecha_registro, saldo)
-                    VALUES (?, ?, ?, ?, ?, ?, NOW(), 0.00)";
+            // 2.3. Inserción en la tabla USUARIO
+            $sql = "INSERT INTO USUARIO (tipo_usuario_id, documento_identidad, nombre_completo, email, password_hash, fecha_registro)
+                    VALUES (?, ?, ?, ?, ?, NOW())";
 
-            // PDO Bind (usando array para execute)
-            if ($pdo->prepare($sql)->execute([$tipo_usuario_id, $doc_id, $full_name, $email, $phone, $password_hash])) {
-                
-                // Redirección exitosa (Mejor práctica para evitar reenvío de formulario)
-                 header("Location: login_pasajeros.php?reg=success");
-                 exit;
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("issss", $tipo_usuario_id, $doc_id, $full_name, $email, $password_hash);
+
+            if ($stmt->execute()) {
+                $new_user_id = $stmt->insert_id;
+                $message = '<div class="alert success">¡Registro Exitoso! Tu cuenta ha sido creada. ID de Usuario: ' . $new_user_id . '. Serás redirigido en breve.</div>';
+                // Redirección exitosa
+                // header("refresh:5; url=login_pasajeros.php"); 
             } else {
-                // CAMBIO DE SEGURIDAD: No exponer errores de BD.
-                $message = '<div class="alert error">Error al registrar usuario. Intente más tarde.</div>'; 
+                $message = '<div class="alert error">Error al registrar usuario: ' . $conn->error . '</div>';
             }
+            $stmt->close();
         }
     }
 }
+// La conexión se cerrará al final del script automáticamente, o con $conn->close() si se desea cerrar antes.
 ?>
 
 <!DOCTYPE html>
@@ -144,7 +124,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($pdo)) {
             padding: 20px 0 50px 0;
         }
         .main-content {
-            max-width: 1100px; /* Aumentado para 3 cards */
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
             background-color: white;
@@ -330,13 +310,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($pdo)) {
             border-top: 1px solid #eee;
         }
 
-        @media (max-width: 1000px) {
-            .account-type-selection {
-                flex-direction: column;
-            }
-        }
         @media (max-width: 768px) {
-            .form-row {
+            .account-type-selection, .form-row {
                 flex-direction: column;
             }
         }
@@ -350,13 +325,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($pdo)) {
             <span style="font-size: 0.7em; display: block; font-weight: normal; color: #666;">Sistema de Boletos Digitales</span>
         </div>
         <nav class="nav-menu">
-             <a href="index.php" class="nav-item">Inicio</a>
-            <a href="registro-usuarios.php" class="nav-item active">Registro</a>
-            <a href="recarga-digital.php" class="nav-item">Recarga</a>
-            <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
-            <a href="mis-boletos.php" class="nav-item">Boletos</a>
-            <a href="historial-viaje.php" class="nav-item">Historial</a>
-         </nav>
+            <a href="#" class="nav-item">Inicio</a>
+            <a href="#" class="nav-item active">Registro</a> 
+            <a href="#" class="nav-item">Recarga</a>
+            <a href="#" class="nav-item">Puntos PR</a>
+            <a href="#" class="nav-item">Boletos</a>
+            <a href="#" class="nav-item">Historial</a>
+        </nav>
         <div class="saldo">
             Saldo: **$125.50** A
         </div>
@@ -376,15 +351,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($pdo)) {
                 <h2>Tipo de Cuenta</h2>
                 <p style="font-size: 0.95em; color: var(--color-text-dark); margin-bottom: 20px;">Selecciona el tipo de usuario que deseas registrar</p>
 
-                <input type="hidden" id="account_type" name="account_type" value="adulto">
+                <input type="hidden" id="account_type" name="account_type" value="standard">
 
                 <div class="account-type-selection">
                     
-                    <div class="account-card selected" data-type="adulto">
+                    <div class="account-card selected" data-type="standard">
                         <div class="radio-dot"></div>
                         <div class="card-content">
                             <i class="fas fa-user"></i>
-                            <h3>Pasajero Estándar (Adulto)</h3>
+                            <h3>Pasajero Estándar</h3>
                             <p>Registro estándar para usuarios adultos con acceso completo al sistema</p>
                             <div class="tariff">Tarifa: **2.50 Bs**</div>
                         </div>
@@ -399,20 +374,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($pdo)) {
                                 <span class="discount-tag">50% Tarifa con descuento.</span>
                             </div>
                             <p>Requiere credencial estudiantil vigente</p>
-                            <div class="tariff">Tarifa: **1.25 Bs**</div>
-                        </div>
-                    </div>
-                    
-                    <div class="account-card" data-type="senior">
-                        <div class="radio-dot"></div>
-                        <div class="card-content">
-                            <i class="fas fa-wheelchair-move"></i>
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <h3>Pasajero Adulto Mayor</h3>
-                                <span class="discount-tag">50% Tarifa con descuento.</span>
-                            </div>
-                            <p>Aplica para personas mayores de 60 años con identificación.</p>
-                            <div class="tariff">Tarifa: **1.25 Bs**</div>
+                            <div class="tariff">Tarifa: **1.00 Bs**</div>
                         </div>
                     </div>
                 </div>
@@ -484,24 +446,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($pdo)) {
             });
         });
         
-        // Mantener la selección después de un error y establecer el default 'adulto'
+        // Mantener la selección después de un error si es posible (simple)
         document.addEventListener('DOMContentLoaded', () => {
              const hiddenInput = document.getElementById('account_type');
-             
-             // Por defecto, se selecciona 'adulto' si el formulario no se ha enviado
-             let currentSelection = 'adulto'; 
-
-             // Si el servidor (PHP) ha guardado un valor POST fallido, usarlo
-             const urlParams = new URLSearchParams(window.location.search);
-             const regStatus = urlParams.get('reg');
-             
-             if (!regStatus) { // Si no es una redirección exitosa, aplicar lógica
+             if (hiddenInput && hiddenInput.value !== 'standard') {
+                 // Si el valor no es standard, intentar seleccionarlo
                  document.querySelectorAll('.account-card').forEach(card => {
-                     card.classList.remove('selected');
+                     if (card.getAttribute('data-type') === hiddenInput.value) {
+                         card.classList.add('selected');
+                     } else {
+                         card.classList.remove('selected');
+                     }
                  });
-                 // Seleccionar la tarjeta de adulto por defecto
-                 document.querySelector('.account-card[data-type="' + currentSelection + '"]').classList.add('selected');
-                 hiddenInput.value = currentSelection;
              }
          });
     </script>
