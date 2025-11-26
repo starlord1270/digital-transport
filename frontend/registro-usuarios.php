@@ -27,7 +27,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $phone = trim($_POST['phone'] ?? '');
     $password_raw = $_POST['password'] ?? '';
     $password_confirm = $_POST['password-confirm'] ?? '';
-    $account_type = trim($_POST['account_type'] ?? 'standard');
+    // Recupera el valor del campo oculto o usa 'standard' por defecto
+    $account_type = trim($_POST['account_type'] ?? 'standard'); 
     
     // 2.1. Validación de campos requeridos y contraseñas
     if (empty($full_name) || empty($doc_id) || empty($email) || empty($phone) || empty($password_raw) || empty($password_confirm)) {
@@ -60,9 +61,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             if ($stmt->execute()) {
                 $new_user_id = $stmt->insert_id;
-                $message = '<div class="alert success">¡Registro Exitoso! Tu cuenta ha sido creada. ID de Usuario: ' . $new_user_id . '. Serás redirigido en breve.</div>';
-                // Redirección exitosa
-                // header("refresh:5; url=login_pasajeros.php"); 
+                // NOTA: Se recomienda redirigir después de un registro exitoso.
+                $message = '<div class="alert success">¡Registro Exitoso! Tu cuenta ha sido creada. ID de Usuario: ' . $new_user_id . '. Serás redirigido a Iniciar Sesión en 5 segundos.</div>';
+                
+                // Redirección exitosa (Descomentar para producción)
+                header("refresh:5; url=inicio-sesion-usuarios.php"); 
             } else {
                 $message = '<div class="alert error">Error al registrar usuario: ' . $conn->error . '</div>';
             }
@@ -116,7 +119,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         .nav-menu { display: flex; gap: 20px; }
         .nav-item { color: #666; text-decoration: none; padding: 5px 10px; border-radius: 5px; font-size: 0.95em; transition: background-color 0.2s, color 0.2s; }
         .nav-item.active { background-color: #f0f0f0; color: var(--color-text-dark); font-weight: 500; }
-        .saldo { font-size: 1em; color: var(--color-text-dark); font-weight: 600; }
+        /* El elemento .saldo no se renderiza en el HTML de registro, por lo que no necesita CSS aquí. */
 
         /* --- Contenido Principal de la Vista --- */
         .page-content-wrapper {
@@ -325,17 +328,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <span style="font-size: 0.7em; display: block; font-weight: normal; color: #666;">Sistema de Boletos Digitales</span>
         </div>
         <nav class="nav-menu">
-            <a href="#" class="nav-item">Inicio</a>
-            <a href="#" class="nav-item active">Registro</a> 
-            <a href="#" class="nav-item">Recarga</a>
-            <a href="#" class="nav-item">Puntos PR</a>
-            <a href="#" class="nav-item">Boletos</a>
-            <a href="#" class="nav-item">Historial</a>
+            <a href="index.php" class="nav-item">Inicio</a>
+            <a href="registro-usuarios.php" class="nav-item active">Registro</a> 
+            <a href="inicio-sesion-usuarios.php" class="nav-item">Iniciar Sesión</a> <a href="recarga-digital.php" class="nav-item">Recarga</a>
+            <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
+            <a href="mis-boletos.php" class="nav-item">Boletos</a>
+            <a href="historial-viaje.php" class="nav-item">Historial</a>
         </nav>
-        <div class="saldo">
-            Saldo: **$125.50** A
-        </div>
-    </header>
+        </header>
 
     <div class="page-content-wrapper">
         <div class="main-content">
@@ -351,78 +351,79 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <h2>Tipo de Cuenta</h2>
                 <p style="font-size: 0.95em; color: var(--color-text-dark); margin-bottom: 20px;">Selecciona el tipo de usuario que deseas registrar</p>
 
-                <input type="hidden" id="account_type" name="account_type" value="standard">
+                <form method="POST"> 
+                    <input type="hidden" id="account_type" name="account_type" value="standard">
 
-                <div class="account-type-selection">
-                    
-                    <div class="account-card selected" data-type="standard">
-                        <div class="radio-dot"></div>
-                        <div class="card-content">
-                            <i class="fas fa-user"></i>
-                            <h3>Pasajero Estándar</h3>
-                            <p>Registro estándar para usuarios adultos con acceso completo al sistema</p>
-                            <div class="tariff">Tarifa: **2.50 Bs**</div>
-                        </div>
-                    </div>
-                    
-                    <div class="account-card" data-type="student">
-                        <div class="radio-dot"></div>
-                        <div class="card-content">
-                            <i class="fas fa-graduation-cap"></i>
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <h3>Pasajero Estudiante</h3>
-                                <span class="discount-tag">50% Tarifa con descuento.</span>
+                    <div class="account-type-selection">
+                        
+                        <div class="account-card selected" data-type="standard">
+                            <div class="radio-dot"></div>
+                            <div class="card-content">
+                                <i class="fas fa-user"></i>
+                                <h3>Pasajero Estándar</h3>
+                                <p>Registro estándar para usuarios adultos con acceso completo al sistema</p>
+                                <div class="tariff">Tarifa: **2.50 Bs**</div>
                             </div>
-                            <p>Requiere credencial estudiantil vigente</p>
-                            <div class="tariff">Tarifa: **1.00 Bs**</div>
+                        </div>
+                        
+                        <div class="account-card" data-type="student">
+                            <div class="radio-dot"></div>
+                            <div class="card-content">
+                                <i class="fas fa-graduation-cap"></i>
+                                <div style="display: flex; align-items: center; justify-content: space-between;">
+                                    <h3>Pasajero Estudiante</h3>
+                                    <span class="discount-tag">50% Tarifa con descuento.</span>
+                                </div>
+                                <p>Requiere credencial estudiantil vigente</p>
+                                <div class="tariff">Tarifa: **1.00 Bs**</div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </section>
-            
-            <section class="form-section" style="padding: 0; border: none; background: none;">
-                <h2>Información Personal</h2>
-                <p style="font-size: 0.95em; color: var(--color-text-dark); margin-bottom: 20px;">Completa tus datos para crear tu cuenta</p>
                 
-                <form method="POST">
-                    <div class="form-row">
-                        <div class="input-group">
-                            <label for="full-name">Nombre Completo <span style="color: red;">*</span></label>
-                            <input type="text" id="full-name" name="full_name" placeholder="Ej: Juan Pérez García" required>
+                </section>
+                
+                <section class="form-section" style="padding: 0; border: none; background: none;">
+                    <h2>Información Personal</h2>
+                    <p style="font-size: 0.95em; color: var(--color-text-dark); margin-bottom: 20px;">Completa tus datos para crear tu cuenta</p>
+                    
+                        <div class="form-row">
+                            <div class="input-group">
+                                <label for="full-name">Nombre Completo <span style="color: red;">*</span></label>
+                                <input type="text" id="full-name" name="full_name" placeholder="Ej: Juan Pérez García" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="doc-id">Documento de Identidad <span style="color: red;">*</span></label>
+                                <input type="text" id="doc-id" name="doc_id" placeholder="Ej: 12345678" required>
+                            </div>
                         </div>
-                        <div class="input-group">
-                            <label for="doc-id">Documento de Identidad <span style="color: red;">*</span></label>
-                            <input type="text" id="doc-id" name="doc_id" placeholder="Ej: 12345678" required>
-                        </div>
-                    </div>
 
-                    <div class="form-row">
-                        <div class="input-group">
-                            <label for="email">Correo Electrónico <span style="color: red;">*</span></label>
-                            <input type="email" id="email" name="email" placeholder="ejemplo@correo.com" required>
+                        <div class="form-row">
+                            <div class="input-group">
+                                <label for="email">Correo Electrónico <span style="color: red;">*</span></label>
+                                <input type="email" id="email" name="email" placeholder="ejemplo@correo.com" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="phone">Teléfono <span style="color: red;">*</span></label>
+                                <input type="tel" id="phone" name="phone" placeholder="Ej: +591 70123456" required>
+                            </div>
                         </div>
-                        <div class="input-group">
-                            <label for="phone">Teléfono <span style="color: red;">*</span></label>
-                            <input type="tel" id="phone" name="phone" placeholder="Ej: +591 70123456" required>
+                        
+                        <div class="form-row">
+                            <div class="input-group">
+                                <label for="password">Contraseña <span style="color: red;">*</span></label>
+                                <input type="password" id="password" name="password" placeholder="Define tu contraseña" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="password-confirm">Confirmar Contraseña <span style="color: red;">*</span></label>
+                                <input type="password" id="password-confirm" name="password-confirm" placeholder="Repite tu contraseña" required>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="input-group">
-                            <label for="password">Contraseña <span style="color: red;">*</span></label>
-                            <input type="password" id="password" name="password" placeholder="Define tu contraseña" required>
-                        </div>
-                        <div class="input-group">
-                            <label for="password-confirm">Confirmar Contraseña <span style="color: red;">*</span></label>
-                            <input type="password" id="password-confirm" name="password-confirm" placeholder="Repite tu contraseña" required>
-                        </div>
-                    </div>
-                    
-                    <button type="submit" class="btn-register">
-                        <i class="fas fa-user-plus"></i> Registrarse
-                    </button>
-                </form>
-            </section>
+                        
+                        <button type="submit" class="btn-register">
+                            <i class="fas fa-user-plus"></i> Registrarse
+                        </button>
+                    </form>
+                </section>
             
         </div>
     </div>
@@ -449,8 +450,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // Mantener la selección después de un error si es posible (simple)
         document.addEventListener('DOMContentLoaded', () => {
              const hiddenInput = document.getElementById('account_type');
+             // Si el hiddenInput existe (debería), intentar restaurar la selección de la tarjeta
              if (hiddenInput && hiddenInput.value !== 'standard') {
-                 // Si el valor no es standard, intentar seleccionarlo
                  document.querySelectorAll('.account-card').forEach(card => {
                      if (card.getAttribute('data-type') === hiddenInput.value) {
                          card.classList.add('selected');

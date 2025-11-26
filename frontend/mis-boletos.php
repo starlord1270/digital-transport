@@ -1,3 +1,36 @@
+<?php
+/**
+ * Archivo: mis-boletos.php
+ * Descripción: Muestra la lista de boletos activos, próximos, usados o vencidos del pasajero.
+ * Incluye lógica de sesión para mostrar el menú dinámico y el saldo.
+ */
+
+// 1. GESTIÓN DE SESIONES
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// 🛑 LÓGICA DE VERIFICACIÓN DE SESIÓN PARA PASAJERO 🛑
+// Asumiendo roles válidos para pasajero: 1, 2, 5, 6
+$valid_passenger_roles = [1, 2, 5, 6]; 
+$user_is_logged_in = (
+    isset($_SESSION['usuario_id']) && 
+    isset($_SESSION['tipo_usuario_id']) && 
+    in_array($_SESSION['tipo_usuario_id'], $valid_passenger_roles)
+);
+
+$nombre_usuario = $user_is_logged_in ? htmlspecialchars($_SESSION['nombre_completo'] ?? 'Pasajero') : 'Invitado';
+// Asegurarse de que el saldo se muestre correctamente si existe
+$user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
+
+// REDIRECCIÓN: Si el usuario no está logueado, no debería ver sus boletos.
+if (!$user_is_logged_in) {
+    $_SESSION['redirect_to'] = 'mis-boletos.php';
+    header("Location: inicio-sesion-usuarios.php");
+    exit();
+}
+// 🛑 FIN LÓGICA DE SESIÓN 🛑
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -10,6 +43,7 @@
     <script src="qrcode.min.js"></script>
 
     <style>
+        /* [Estilos CSS - Mantenidos del Código Original] */
         :root {
             --color-primary: #0b2e88;
             --color-secondary: #1e88e5;
@@ -197,8 +231,6 @@
             margin: 10px auto;
         }
         
-        /* 🛑 REGLA ELIMINADA: Ya no se aplica estilos al canvas interno. */
-
         .qr-code-verification {
             font-size: 0.8em;
             color: #999;
@@ -236,16 +268,24 @@
             Digital Transport
             <span style="font-size: 0.7em; display: block; font-weight: normal; color: #666;">Sistema de Boletos Digitales</span>
         </div>
+        
         <nav class="nav-menu">
-             <a href="index.php" class="nav-item">Inicio</a>
-            <a href="registro-usuarios.php" class="nav-item">Registro</a>
+            <a href="index.php" class="nav-item">Inicio</a>
             <a href="recarga-digital.php" class="nav-item">Recarga</a>
             <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
-            <a href="mis-boletos.php" class="nav-item">Boletos</a>
-            <a href="historial-viaje.php" class="nav-item active">Historial</a> 
+            <a href="mis-boletos.php" class="nav-item active">Boletos</a>
+            <a href="historial-viaje.php" class="nav-item">Historial</a> 
+            <a href="perfil-usuario.php" class="nav-item">
+                <i class="fas fa-user-circle"></i> Perfil
+            </a>
+            <a href="../backend/logout.php?redirect=mis-boletos.php" class="nav-item">
+                <i class="fas fa-sign-out-alt"></i> Salir
+            </a>
         </nav>
+        
         <div class="saldo">
-            Saldo: **$125.50** A
+            <span style="margin-right: 15px; font-weight: 500;">¡Hola, <?php echo $nombre_usuario; ?>!</span>
+            Saldo: **Bs. <?php echo number_format($user_balance, 2); ?>**
         </div>
     </header>
 
@@ -260,8 +300,11 @@
                 <div class="active-count">
                     </div>
             </header>
-
-            </div>
+            
+            <div id="content-area">
+                </div>
+            
+        </div>
     </div>
 
     <footer class="footer">
@@ -273,42 +316,61 @@
         // I. DATOS DINÁMICOS: FETCH
         // ----------------------------------------------------
 
-        // 🛑 RUTA CORREGIDA 🛑
-        // Si el archivo actual está en 'frontend/' y el PHP está en 'backend/', 
-        // necesitamos ir un nivel hacia atrás (..) y luego entrar en 'backend/'.
+        // 🛑 RUTA CORREGIDA CONFIRMADA: Desde /frontend/mis-boletos.php hasta /backend/fetch_tickets.php
         const API_URL = '../backend/fetch_tickets.php'; 
         
-        let allTicketsData = []; // Variable para almacenar los datos de la BD una vez cargados
-
-        // Contenedor principal para renderizar los boletos
-        const ticketListContainer = document.createElement('div');
-        ticketListContainer.id = 'ticket-list';
-        document.querySelector('.main-content').appendChild(ticketListContainer);
+        let allTicketsData = []; // Almacena los datos de la BD una vez cargados
+        const contentArea = document.getElementById('content-area'); // Contenedor principal
 
         /**
          * Obtiene los datos de los boletos del backend y luego renderiza.
+         * Se asegura de que los datos solo se carguen una vez del servidor.
          */
         async function fetchAndRenderTickets(filterStatus = 'Activos') {
-            const container = document.getElementById('ticket-list');
+            
+            // 1. CARGA DE DATOS (Solo si no han sido cargados antes)
             if (allTicketsData.length === 0) {
-                container.innerHTML = '<p style="text-align: center; color: var(--color-secondary);"><i class="fas fa-spinner fa-spin"></i> Cargando boletos...</p>';
+                
+                // Mostrar spinner de carga
+                contentArea.innerHTML = '<p style="text-align: center; color: var(--color-secondary);"><i class="fas fa-spinner fa-spin"></i> Cargando boletos...</p>';
+
                 try {
-                    // 🛑 AQUÍ SE HACE LA LLAMADA AL NUEVO API_URL 🛑
                     const response = await fetch(API_URL);
                     if (!response.ok) {
-                        // Si el archivo existe pero da un error 500 o 404
-                        throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+                        // Captura errores HTTP como 404, 500, 401
+                        throw new Error(`Error HTTP: ${response.status}`);
                     }
-                    allTicketsData = await response.json();
+                    
+                    const data = await response.json();
+
+                    if (data.error) {
+                        // Captura errores de aplicación devueltos en el JSON (ej: error de conexión PDO)
+                         throw new Error(`Error BD: ${data.error}`);
+                    }
+                    
+                    allTicketsData = data;
                 } catch (error) {
                     console.error("No se pudieron cargar los boletos:", error);
-                    container.innerHTML = `<p style="color: red; text-align: center;">Error al cargar boletos del servidor. Verifique la ruta (${API_URL}) y el script PHP.</p>`;
+                    let errorMessage = error.message;
+
+                    // Si la BD devuelve un error CRÍTICO, lo mostramos
+                    if (errorMessage.includes("Error CRÍTICO de Base de Datos")) {
+                        errorMessage = errorMessage.replace("Error BD: ", "");
+                    } else if (errorMessage.includes("Error HTTP: 500")) {
+                        errorMessage = "Error 500 (Servidor): Verifique la configuración PHP (PDO) y el estado de MySQL.";
+                    } else if (errorMessage.includes("Error HTTP: 401")) {
+                        errorMessage = "Error 401 (Sesión): Por favor, inicie sesión nuevamente.";
+                    } else {
+                        errorMessage = `Error al cargar boletos del servidor. Consulte la consola. (${errorMessage})`;
+                    }
+                    
+                    contentArea.innerHTML = `<p style="color: red; text-align: center; padding: 20px;">${errorMessage}</p>`;
                     allTicketsData = []; 
                     return;
                 }
             }
             
-            // Llama a renderTickets con los datos dinámicos
+            // 2. RENDERIZADO (Con los datos ya cargados)
             renderTickets(filterStatus, allTicketsData); 
         }
 
@@ -316,14 +378,13 @@
         // II. LÓGICA DE RENDERIZADO Y UTILIDADES
         // ----------------------------------------------------
         
-        // ... (el resto de las funciones: formatDate, getStatusInfo, generateQRCode, createTicketHTML) ...
-
         /**
          * Formatea la fecha de vencimiento. 
          */
         function formatDate(isoString) {
             const date = new Date(isoString);
             const now = new Date();
+            // Si el boleto está programado para hoy, muestra la hora
             if (date.toDateString() === now.toDateString()) {
                 return 'Hoy ' + date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
             }
@@ -348,6 +409,7 @@
 
         /**
          * Dibuja un código QR real en un elemento div usando qrcode.js.
+         * NOTA: Requiere que el archivo 'qrcode.min.js' esté cargado.
          */
         function generateQRCode(elementId, data) {
             const container = document.getElementById(elementId);
@@ -372,12 +434,37 @@
          */
         function createTicketHTML(ticket) {
              const statusInfo = getStatusInfo(ticket.status);
+            // El boleto está "terminado" si las uses son iguales, o el status es Usado/Vencido.
             const isFinished = ticket.usedUses >= ticket.totalUses || ticket.status === 'Usado' || ticket.status === 'Vencido';
-            const progress = (ticket.usedUses / ticket.totalUses) * 100;
+            const progress = (ticket.totalUses > 0) ? (ticket.usedUses / ticket.totalUses) * 100 : 0;
             const toggleId = `toggle-qr-button-${ticket.id}`;
             const qrAreaId = `qr-area-${ticket.id}`;
             const qrCanvasId = `qr-canvas-${ticket.id}`;
             const opacityStyle = isFinished ? 'opacity: 0.6;' : '';
+
+            // Lógica para mostrar las Uses de manera adecuada
+            const usageText = (ticket.type.includes('Pase Saldo')) ? 
+                `<p style="text-align: right; color: var(--color-text-dark);">${ticket.type.replace('Pase Saldo (Actual: ', '').replace(')', '')}</p>` :
+                `<p style="text-align: right; color: var(--color-text-dark);">**${ticket.usedUses}** / ${ticket.totalUses}</p>`;
+
+            // Lógica para no mostrar barra de uso en pases de saldo puro (para simplificar la UI)
+            const usageBarHTML = (ticket.type.includes('Pase Saldo')) ? 
+                `
+                <div class="usage-bar">
+                    <p>Saldo actual (Bs)</p>
+                    ${usageText}
+                </div>
+                `
+                :
+                `
+                <div class="usage-bar">
+                    <p>Viajes utilizados</p>
+                    <div class="progress-container">
+                        <div class="progress-fill" style="width: ${progress}%; background-color: ${statusInfo.color};"></div>
+                    </div>
+                    ${usageText}
+                </div>
+                `;
 
             const html = `
                 <div class="ticket-card" style="${opacityStyle}">
@@ -396,18 +483,12 @@
                         <p>Válido hasta: **${formatDate(ticket.expires)}**</p>
                     </div>
 
-                    <div class="usage-bar">
-                        <p>Viajes utilizados</p>
-                        <div class="progress-container">
-                            <div class="progress-fill" style="width: ${progress}%; background-color: ${statusInfo.color};"></div>
-                        </div>
-                        <p style="text-align: right; color: var(--color-text-dark);">**${ticket.usedUses}** / ${ticket.totalUses}</p>
-                    </div>
+                    ${usageBarHTML}
                     
                     ${!isFinished ? `
                     <div class="qr-toggle">
                         <button id="${toggleId}">
-                            Ocultar Código QR <i class="fas fa-angle-up"></i>
+                            Mostrar Código QR <i class="fas fa-angle-down"></i>
                         </button>
                     </div>
 
@@ -430,7 +511,6 @@
          * Renderiza la lista completa de boletos.
          */
         function renderTickets(filterStatus, ticketsData) {
-            const container = document.getElementById('ticket-list');
             
             // 1. Filtrar los datos
             const filteredTickets = ticketsData.filter(ticket => {
@@ -461,13 +541,56 @@
                 });
             }
 
-            container.innerHTML = ticketsHTML;
+            // Insertar filtros + boletos
+            const filterControlsHTML = createFilterControlsHTML(filterStatus);
+            contentArea.innerHTML = filterControlsHTML + ticketsHTML;
             
             // 3. Actualizar el contador de boletos activos (usando todos los datos)
             const activeCount = ticketsData.filter(t => t.status === 'Activo' || t.status === 'Próximo').length;
             document.querySelector('.active-count').textContent = `${activeCount} activos`;
 
             // 4. Adjuntar event listeners y generar QRs
+            attachEventListeners(filteredTickets, filterStatus);
+        }
+        
+        // ----------------------------------------------------
+        // III. IMPLEMENTACIÓN DE FILTROS Y EVENTOS
+        // ----------------------------------------------------
+
+        /**
+         * Crea el HTML de los botones de filtro con el estado 'active' correcto.
+         */
+        function createFilterControlsHTML(currentFilter) {
+            const filters = [
+                { name: 'Activos/Próximos', value: 'Activos' },
+                { name: 'Usados/Vencidos', value: 'Usados' },
+                { name: 'Todos', value: 'Todos' }
+            ];
+            
+            let html = '<div class="filter-controls" style="margin-bottom: 20px; display: flex; gap: 10px;">';
+            filters.forEach(filter => {
+                const isActive = filter.value === currentFilter ? ' active' : '';
+                html += `<button class="filter-btn${isActive}" data-filter="${filter.value}">${filter.name}</button>`;
+            });
+            html += '</div>';
+            return html;
+        }
+
+        /**
+         * Adjunta los listeners para los botones de filtro y el toggle del QR.
+         */
+        function attachEventListeners(filteredTickets, currentFilter) {
+            
+            // 1. Listeners para Botones de Filtro (deben adjuntarse después de insertar el HTML)
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            filterButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // Solo vuelve a renderizar los boletos (sin volver a hacer fetch)
+                    renderTickets(this.dataset.filter, allTicketsData);
+                });
+            });
+
+            // 2. Listeners para el Toggle de QR
             filteredTickets.forEach((ticket) => {
                 const toggleId = `toggle-qr-button-${ticket.id}`;
                 const qrAreaId = `qr-area-${ticket.id}`;
@@ -477,17 +600,14 @@
                 if (!isFinished) {
                     const toggleButton = document.getElementById(toggleId);
                     const qrArea = document.getElementById(qrAreaId);
-                    const qrElement = document.getElementById(qrCanvasId);
-
-                    if (qrArea && toggleButton && qrElement) {
+                    
+                    if (qrArea && toggleButton) {
                         
-                        // Generar el código QR 
+                        // Generar el código QR de inmediato (ya que no es visible al inicio, no hay penalización)
                         generateQRCode(qrCanvasId, ticket.qrData);
 
                         let isQrVisible = false; 
-                        qrArea.style.display = 'none';
-                        toggleButton.innerHTML = 'Mostrar Código QR <i class="fas fa-angle-down"></i>';
-
+                        
                         toggleButton.addEventListener('click', function() {
                             if (isQrVisible) {
                                 qrArea.style.display = 'none';
@@ -502,51 +622,10 @@
                 }
             });
         }
-        
-        // ----------------------------------------------------
-        // III. IMPLEMENTACIÓN DE FILTROS
-        // ----------------------------------------------------
 
+
+        // Llamada inicial para cargar el contenido de boletos al iniciar la página
         document.addEventListener('DOMContentLoaded', () => {
-            
-            // Insertamos el área de filtros
-            const filterHTML = `
-                <div class="filter-controls" style="margin-bottom: 20px; display: flex; gap: 10px;">
-                    <button class="filter-btn" data-filter="Activos">Activos/Próximos</button>
-                    <button class="filter-btn" data-filter="Usados">Usados/Vencidos</button>
-                    <button class="filter-btn" data-filter="Todos">Todos</button>
-                </div>
-            `;
-            const mainContent = document.querySelector('.main-content');
-            // Asegura que el contenedor de lista exista antes de intentar agregar filtros
-            if (mainContent && document.querySelector('.section-header')) {
-                document.querySelector('.section-header').insertAdjacentHTML('afterend', filterHTML);
-            }
-
-            // Lógica de filtros
-            const filterButtons = document.querySelectorAll('.filter-btn');
-            filterButtons.forEach(button => {
-                
-                // Establecer el filtro inicial y su estilo
-                if(button.dataset.filter === 'Activos') {
-                    button.classList.add('active'); 
-                }
-
-                button.addEventListener('click', function() {
-                    // Limpiar estilos y estado de todos los botones
-                    filterButtons.forEach(btn => {
-                        btn.classList.remove('active');
-                    });
-                    
-                    // Establecer estilo activo en el botón clickeado
-                    this.classList.add('active');
-                    
-                    // Llamada al nuevo FETCH 
-                    fetchAndRenderTickets(this.dataset.filter);
-                });
-            });
-
-            // Llamada inicial para cargar el contenido de boletos 'Activos'
             fetchAndRenderTickets('Activos'); 
         });
         

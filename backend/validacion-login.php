@@ -1,98 +1,140 @@
 <?php
 // backend/validacion-login.php
-session_start(); // Iniciar la sesión de PHP
 
-// 1. GESTIÓN DE ERRORES Y CONFIGURACIÓN INICIAL
-ini_set('display_errors', 0); 
-ini_set('display_startup_errors', 0);
-error_reporting(0);
+// 1. Establecer la cabecera JSON
 header('Content-Type: application/json');
 
-// Función de respuesta centralizada
-function sendResponse($success, $message, $redirect = null) {
-    echo json_encode(['success' => $success, 'message' => $message, 'redirect' => $redirect]);
+// 2. Incluir el archivo de conexión (bd.php)
+require_once 'bd.php'; 
+
+// Inicialización de la respuesta
+$response = [
+    'success' => false,
+    'message' => 'Error de autenticación.',
+    'redirect' => ''
+];
+
+// Comprobación de la conexión a la base de datos
+if ($conn->connect_error) {
+    $response['message'] = 'Error grave de conexión a la base de datos. Verifique el servidor MySQL.';
+    @$conn->close();
+    echo json_encode($response);
     exit;
 }
 
-// --- CONFIGURACIÓN DE LA BASE DE DATOS (PDO) ---
-$dbHost = 'localhost';
-$dbName = 'digital-transport'; 
-$dbUser = 'root'; 
-$dbPass = ''; 
-
-try {
-    $pdo = new PDO("mysql:host=$dbHost;dbname=$dbName;charset=utf8", $dbUser, $dbPass);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); 
-} catch (PDOException $e) {
-    sendResponse(false, 'Error de conexión a BD. Revise la configuración de conexión.');
-}
-// --- FIN CONFIGURACIÓN DE LA BASE DE DATOS ---
-
-// 2. RECEPCIÓN Y VALIDACIÓN DE DATOS
-$email = trim($_POST['email'] ?? '');
-$password = $_POST['password'] ?? '';
-
-if (empty($email) || empty($password)) {
-    sendResponse(false, 'Debe ingresar email y contraseña.');
+// 3. Recoger y Sanear los datos
+if (!isset($_POST['email']) || !isset($_POST['password'])) {
+    $response['message'] = 'Faltan campos obligatorios.';
+    $conn->close(); 
+    echo json_encode($response);
+    exit;
 }
 
-// 3. CONSULTAR USUARIO POR EMAIL
-try {
-    // 🔑 CORRECCIÓN FINAL: Usar T.descripcion para obtener el nombre del rol.
-    $sql = "SELECT 
-                U.usuario_id, U.password_hash, U.tipo_usuario_id, T.descripcion AS rol_nombre 
-            FROM USUARIO U
-            JOIN TIPO_USUARIO T ON U.tipo_usuario_id = T.tipo_usuario_id
-            WHERE U.email = ?";
-    
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([$email]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+$email = $conn->real_escape_string(trim($_POST['email']));
+$password = $_POST['password'];
 
-    if (!$user) {
-        sendResponse(false, 'Email o contraseña incorrectos.');
-    }
+// 4. Preparar la consulta SQL
+$sql = "SELECT usuario_id, password_hash, tipo_usuario_id, nombre_completo FROM USUARIO WHERE email = ?"; 
+$stmt = $conn->prepare($sql);
 
-    // 4. VERIFICAR CONTRASEÑA
+if ($stmt === false) {
+    $response['message'] = 'Error interno del servidor. No se pudo preparar la consulta.';
+    $conn->close();
+    echo json_encode($response);
+    exit;
+}
+
+// Enlazar parámetro y ejecutar
+$stmt->bind_param("s", $email);
+$stmt->execute();
+$result = $stmt->get_result();
+$user = $result->fetch_assoc();
+$stmt->close(); 
+
+if ($user) {
+    // 5. Verificar la contraseña
     if (password_verify($password, $user['password_hash'])) {
         
-        // --- INICIO DE SESIÓN EXITOSO ---
+        // Credenciales correctas. Iniciar sesión.
+        session_start();
         
-        // 5. ASIGNAR VARIABLES DE SESIÓN
-        $_SESSION['user_id'] = $user['usuario_id'];
+        // ⭐ CORRECCIÓN CLAVE 1: Limpiar y asegurar la sesión
+        // Limpia completamente la sesión anterior y genera un nuevo ID para prevenir ataques de fijación de sesión.
+        $_SESSION = array(); 
+        session_regenerate_id(true); // <--- AÑADIDO: Regenera el ID de sesión por seguridad.
+        
+        $_SESSION['usuario_id'] = $user['usuario_id'];
         $_SESSION['tipo_usuario_id'] = $user['tipo_usuario_id'];
-        $_SESSION['rol_nombre'] = $user['rol_nombre']; // Contiene el valor de 'descripcion'
+        $_SESSION['logged_in'] = true;
         
-        // 6. DETERMINAR LA RUTA DE REDIRECCIÓN (Relativa a login.php)
-        $redirect_path = '';
+        // Guardar el nombre completo en la sesión 
+        $_SESSION['nombre_completo'] = $user['nombre_completo'];
+
+        $tipo_id = $user['tipo_usuario_id'];
+
+        // 6. Determinar la redirección y obtener datos adicionales
         
-        switch ($user['tipo_usuario_id']) {
-            case 4: // Administrador de Línea
-                $redirect_path = '../admin/dashboard.php'; 
-                break;
-            case 3: // Chofer
-                $redirect_path = '../chofer/cobro.php'; 
-                break;
-            case 1: // Cliente
-                $redirect_path = '../cliente/perfil.php'; 
-                break;
-            case 2: // Punto de Recarga
-                $redirect_path = '../punto-recarga/dashboard.php';
-                break;
-            default:
-                $redirect_path = '../error_rol.php';
+        if ($tipo_id == 4) { // ADMIN_LINEA
+            
+            $stmt_linea = $conn->prepare("SELECT linea_id FROM ADMIN_LINEA WHERE usuario_id = ?");
+            
+            if ($stmt_linea === false) {
+                // Manejar error si la consulta del admin de línea falla.
+                $response['success'] = false;
+                $response['message'] = "Error interno al verificar la línea. Contacte a soporte.";
+            } else {
+                $stmt_linea->bind_param("i", $user['usuario_id']);
+                $stmt_linea->execute();
+                $result_linea = $stmt_linea->get_result();
+                
+                if ($admin_data = $result_linea->fetch_assoc()) {
+                    $_SESSION['linea_id'] = $admin_data['linea_id']; 
+                    
+                    $response['success'] = true;
+                    $response['message'] = '¡Bienvenido Administrador! Redirigiendo...';
+                    $response['redirect'] = '/Competencia-Analisis/digital-transport/frontend/dashboard-admin-linea/dashboard-admin.php'; 
+                } else {
+                    $response['success'] = false;
+                    $response['message'] = "Error: Administrador de Línea sin asignación. Contacte a soporte.";
+                }
+                
+                $stmt_linea->close(); // <--- CORREGIDO: Cerrar el statement
+            }
+
+        } elseif ($tipo_id == 3) { // CHOFER
+            
+            // ACCIÓN CLAVE 1: ACTUALIZAR ESTADO A 'ACTIVO'
+            $chofer_usuario_id = $user['usuario_id'];
+            
+            $sql_update = "UPDATE CHOFER SET estado_servicio = 'ACTIVO' WHERE usuario_id = ?";
+            $stmt_update = $conn->prepare($sql_update);
+
+            if ($stmt_update) {
+                $stmt_update->bind_param("i", $chofer_usuario_id);
+                $stmt_update->execute();
+                $stmt_update->close();
+            } 
+            // Nota: Se asume que el update fue exitoso para el flujo de login del chofer.
+            
+            $response['success'] = true;
+            $response['message'] = '¡Bienvenido Chofer! Redirigiendo a Cobro...';
+            $response['redirect'] = '/Competencia-Analisis/digital-transport/frontend/choferes/cobro-chofer.php'; 
+        
+        } else {
+            // OTROS USUARIOS (Pasajero, Admin Central, etc.)
+            $response['success'] = true;
+            $response['message'] = '¡Bienvenido! Redirigiendo...';
+            $response['redirect'] = '/Competencia-Analisis/digital-transport/frontend/cliente/panel-principal.php'; 
         }
         
-        // 7. ENVIAR RESPUESTA DE ÉXITO CON LA RUTA DE REDIRECCIÓN
-        sendResponse(true, "Bienvenido, " . $user['rol_nombre'] . ". Ingresando al sistema...", $redirect_path);
-
     } else {
-        // Contraseña incorrecta
-        sendResponse(false, 'Email o contraseña incorrectos.');
+        $response['message'] = 'Email o Contraseña incorrectos.';
     }
-
-} catch (PDOException $e) {
-    // Mantener la depuración hasta confirmar que funciona, luego se puede cambiar a un mensaje genérico.
-    sendResponse(false, 'Error interno del servidor (BD): ' . $e->getMessage()); 
+} else {
+    $response['message'] = 'Email o Contraseña incorrectos.';
 }
-?>
+
+// 7. Cerrar la conexión y enviar la respuesta
+$conn->close();
+echo json_encode($response);
+exit;

@@ -46,6 +46,7 @@ if (empty($nombre_completo) || empty($documento_identidad) || empty($email) || e
 if ($tipo_usuario_id == 4 && (empty($cargo) || $linea_id <= 0)) {
     sendResponse(false, 'Para Administrador, el Cargo y el ID de Línea son obligatorios.');
 }
+// La placa y la licencia son obligatorias para el Chofer.
 if ($tipo_usuario_id == 3 && (empty($licencia) || empty($vehiculo_placa) || $linea_id <= 0)) {
     sendResponse(false, 'Para Chofer, la Licencia, la Placa del Vehículo y el ID de Línea son obligatorios.');
 }
@@ -57,8 +58,19 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 // --- INICIO DE LA TRANSACCIÓN ---
 try {
     $pdo->beginTransaction();
-
-    // 4. VERIFICAR QUE EL EMAIL NO EXISTA YA
+    
+    // 4. VERIFICACIÓN CRÍTICA: La existencia del ID de Línea
+    $sql_linea_check = "SELECT linea_id FROM LINEA WHERE linea_id = ?";
+    $stmt_linea_check = $pdo->prepare($sql_linea_check);
+    $stmt_linea_check->execute([$linea_id]);
+    
+    if (!$stmt_linea_check->fetch()) {
+        $pdo->rollBack();
+        // Mensaje de error específico para tu caso:
+        sendResponse(false, '❌ ERROR CRÍTICO DE LÍNEA: El ID ' . $linea_id . ' no existe en la tabla LINEA. Verifique la BD o el formulario.');
+    }
+    
+    // 5. VERIFICAR QUE EL EMAIL NO EXISTA YA
     $sql_check = "SELECT usuario_id FROM USUARIO WHERE email = ?";
     $stmt_check = $pdo->prepare($sql_check);
     $stmt_check->execute([$email]);
@@ -67,7 +79,7 @@ try {
         sendResponse(false, 'El email ya se encuentra registrado en el sistema.');
     }
 
-    // 5. INSERCIÓN EN LA TABLA USUARIO
+    // 6. INSERCIÓN EN LA TABLA USUARIO
     $password_hash = password_hash($password, PASSWORD_DEFAULT);
     
     $sql_usuario = "INSERT INTO USUARIO (nombre_completo, documento_identidad, email, password_hash, tipo_usuario_id) 
@@ -77,7 +89,7 @@ try {
     
     $usuario_id = $pdo->lastInsertId(); 
 
-    // 6. INSERCIÓN EN LA TABLA ESPECÍFICA (ADMIN o CHOFER)
+    // 7. INSERCIÓN EN LA TABLA ESPECÍFICA (ADMIN o CHOFER)
     if ($tipo_usuario_id === 4) {
         // ADMIN_LINEA
         $sql_admin = "INSERT INTO ADMIN_LINEA (usuario_id, linea_id, cargo) VALUES (?, ?, ?)";
@@ -87,30 +99,47 @@ try {
 
     } elseif ($tipo_usuario_id === 3) {
         // CHOFER
-        $estado_servicio = 'INACTIVO'; // Estado por defecto
+        
+        // ⭐ LÓGICA DE CREACIÓN DINÁMICA DE VEHÍCULO SI ES NUEVO
+        $sql_check_vehiculo = "SELECT placa FROM VEHICULO WHERE placa = ?";
+        $stmt_check_vehiculo = $pdo->prepare($sql_check_vehiculo);
+        $stmt_check_vehiculo->execute([$vehiculo_placa]);
+
+        if (!$stmt_check_vehiculo->fetch()) {
+            // El vehículo no existe, lo insertamos primero
+            $sql_insert_vehiculo = "INSERT INTO VEHICULO (placa, modelo, capacidad, linea_id) 
+                                    VALUES (?, ?, ?, ?)";
+            $stmt_insert_vehiculo = $pdo->prepare($sql_insert_vehiculo);
+            
+            $modelo_defecto = 'Registrado por Chofer (' . $vehiculo_placa . ')';
+            $capacidad_defecto = 40; // Asignar una capacidad estándar
+            
+            // Se inserta usando la linea_id que el Chofer especificó
+            $stmt_insert_vehiculo->execute([$vehiculo_placa, $modelo_defecto, $capacidad_defecto, $linea_id]);
+        }
+        
+        // Inserción del Chofer
+        $estado_servicio = 'INACTIVO'; 
         $sql_chofer = "INSERT INTO CHOFER (usuario_id, linea_id, licencia, vehiculo_placa, estado_servicio) 
                        VALUES (?, ?, ?, ?, ?)";
         $stmt_chofer = $pdo->prepare($sql_chofer);
         $stmt_chofer->execute([$usuario_id, $linea_id, $licencia, $vehiculo_placa, $estado_servicio]);
         $rol_texto = 'Chofer';
+        
     } else {
         $pdo->rollBack();
         sendResponse(false, 'Error interno: ID de rol no reconocido.');
     }
 
-    // 7. SI TODO VA BIEN: COMMIT
+    // 8. COMMIT y RESPUESTA FINAL
     $pdo->commit();
     sendResponse(true, "✅ Registro exitoso como $rol_texto. Serás redirigido al login.");
 
 } catch (PDOException $e) {
     $pdo->rollBack();
     
-    // Si la excepción es por llave foránea, emitimos un mensaje más específico.
-    if (strpos($e->getMessage(), 'foreign key constraint fails') !== false) {
-        sendResponse(false, '❌ Error de datos: El ID de Línea o la Placa del Vehículo NO existen en la base de datos.');
-    } else {
-        // Si es otro error de BD, mostramos el mensaje genérico (útil para debug).
-        sendResponse(false, '❌ Error al procesar el registro: ' . $e->getMessage()); 
-    }
+    // Este bloque CATCH ahora es menos probable que capture errores de FK,
+    // pero sigue siendo importante para otros errores críticos de BD.
+    sendResponse(false, '❌ Error al procesar el registro (DB): ' . $e->getMessage()); 
 }
 ?>

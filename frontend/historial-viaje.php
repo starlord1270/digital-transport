@@ -1,3 +1,53 @@
+<?php
+/**
+ * Archivo: historial-viaje.php
+ * Descripción: Muestra el historial de viajes del pasajero.
+ * Incluye lógica de sesión para mostrar el menú dinámico y el saldo.
+ * * NOTA: Para que esta página funcione correctamente, el backend
+ * debe proporcionar un archivo en la ruta '../backend/fetch_history.php'
+ * que devuelva un JSON con el siguiente formato:
+ * {
+ * "total_trips": 56,
+ * "total_spent": 140.00,
+ * "history": [
+ * {
+ * "date": "2025-11-23", 
+ * "time": "14:15", 
+ * "line": "Línea 207 (Av. América)", 
+ * "details": "Cobro Tarifa Estándar", 
+ * "amount": 2.50, 
+ * "status": "Completado"
+ * },
+ * // ... más viajes ...
+ * ]
+ * }
+ */
+
+// 1. GESTIÓN DE SESIONES
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// 🛑 LÓGICA DE VERIFICACIÓN DE SESIÓN PARA PASAJERO 🛑
+// Incluimos los roles de pasajero (asumiendo 1, 2, 5, 6)
+$user_is_logged_in = (
+    isset($_SESSION['usuario_id']) && 
+    isset($_SESSION['tipo_usuario_id']) && 
+    in_array($_SESSION['tipo_usuario_id'], [1, 2, 5, 6])
+);
+
+$nombre_usuario = $user_is_logged_in ? htmlspecialchars($_SESSION['nombre_completo'] ?? 'Pasajero') : 'Invitado';
+$user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
+
+// REDIRECCIÓN: Si el usuario no está logueado, no debería ver su historial.
+if (!$user_is_logged_in) {
+    // Guarda la URL actual para redirigir después del login
+    $_SESSION['redirect_to'] = 'historial-viaje.php';
+    header("Location: inicio-sesion-usuarios.php");
+    exit();
+}
+// 🛑 FIN LÓGICA DE SESIÓN 🛑
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -208,15 +258,24 @@
             Digital Transport
             <span style="font-size: 0.7em; display: block; font-weight: normal; color: #666;">Sistema de Boletos Digitales</span>
         </div>
+        
         <nav class="nav-menu">
             <a href="index.php" class="nav-item">Inicio</a>
-            <a href="registro-usuarios.php" class="nav-item">Registro</a>
             <a href="recarga-digital.php" class="nav-item">Recarga</a>
             <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
             <a href="mis-boletos.php" class="nav-item">Boletos</a>
             <a href="historial-viaje.php" class="nav-item active">Historial</a> 
+            <a href="perfil-usuario.php" class="nav-item">
+                <i class="fas fa-user-circle"></i> Perfil
+            </a>
+            <a href="../backend/logout.php?redirect=historial-viaje.php" class="nav-item">
+                <i class="fas fa-sign-out-alt"></i> Salir
+            </a>
+        </nav>
+        
         <div class="saldo">
-            Saldo: **$125.50** A
+            <span style="margin-right: 15px; font-weight: 500;">¡Hola, <?php echo $nombre_usuario; ?>!</span>
+            Saldo: **Bs. <?php echo number_format($user_balance, 2); ?>**
         </div>
     </header>
 
@@ -236,13 +295,15 @@
             <div class="summary-cards">
                 <div class="summary-card">
                     <h4>Total de Viajes</h4>
-                    <h2 class="total-trips-value">0</h2> <div class="change">
+                    <h2 class="total-trips-value">0</h2> 
+                    <div class="change">
                         <i class="fas fa-arrow-up"></i> +12% vs mes anterior
                     </div>
                 </div>
                 <div class="summary-card">
                     <h4>Gasto Total</h4>
-                    <h2 class="total-spent-value">Bs. 0.00</h2> <p style="font-size: 0.8em; color: #999;" class="total-spent-detail">Últimos 30 días</p>
+                    <h2 class="total-spent-value">Bs. 0.00</h2> 
+                    <p style="font-size: 0.8em; color: #999;" class="total-spent-detail">Últimos 30 días</p>
                 </div>
             </div>
 
@@ -262,7 +323,7 @@
         // I. CONFIGURACIÓN Y REFERENCIAS
         // ----------------------------------------------------
         // 🛑 RUTA AL BACKEND 🛑
-        // Asumiendo que historial_viajes.php está en frontend/
+        // Este script depende de un archivo PHP en el backend para obtener los datos.
         const API_URL = '../backend/fetch_history.php'; 
         
         const tripListContainer = document.querySelector('.trip-list');
@@ -276,7 +337,8 @@
         /** Agrupa los viajes por fecha. */
         function groupTripsByDate(trips) {
             return trips.reduce((acc, trip) => {
-                const date = trip.date;
+                // Asume que la propiedad 'date' del objeto trip es la fecha (ej: "YYYY-MM-DD")
+                const date = trip.date; 
                 if (!acc[date]) {
                     acc[date] = [];
                 }
@@ -288,14 +350,19 @@
         /** Formatea la fecha para el encabezado del grupo. */
         function formatGroupDate(dateString, tripCount) {
             const date = new Date(dateString);
+            // Mostrar fecha en formato legible
             const options = { day: 'numeric', month: 'short', year: 'numeric' };
             const formattedDate = date.toLocaleDateString('es-ES', options);
+            
             const countText = `${tripCount} ${tripCount === 1 ? 'viaje' : 'viajes'}`;
             return `${formattedDate} <span style="font-weight: 400; color: #999;">(${countText})</span>`;
         }
 
         /** Crea el HTML para un ítem de viaje. */
         function createTripItemHTML(trip) {
+            // Aseguramos que el monto tenga dos decimales
+            const formattedAmount = parseFloat(trip.amount).toFixed(2);
+            
             return `
                 <div class="trip-item">
                     <div class="trip-details">
@@ -306,7 +373,7 @@
                         </div>
                     </div>
                     <div class="trip-amount">
-                        Bs. ${trip.amount.toFixed(2)}
+                        Bs. ${formattedAmount}
                         <div class="trip-status">${trip.status}</div>
                     </div>
                 </div>
@@ -320,9 +387,11 @@
             
             // 1. Actualizar tarjetas de resumen
             totalTripsElement.textContent = data.total_trips;
-            totalSpentElement.textContent = `Bs. ${data.total_spent}`;
+            // Asegurar el formato de moneda en el total
+            totalSpentElement.textContent = `Bs. ${parseFloat(data.total_spent).toFixed(2)}`;
             
             // 2. Generar HTML agrupado
+            // Ordenar las fechas de forma descendente (más reciente primero)
             const sortedDates = Object.keys(historyGroups).sort((a, b) => new Date(b) - new Date(a));
             
             if (sortedDates.length === 0) {
@@ -335,6 +404,9 @@
                 const formattedDate = formatGroupDate(date, trips.length);
                 
                 let itemsHTML = '';
+                // Los viajes dentro del grupo pueden ordenarse por hora para ser precisos
+                trips.sort((a, b) => (new Date(`${a.date} ${a.time}`) < new Date(`${b.date} ${b.time}`) ? 1 : -1));
+                
                 trips.forEach(trip => {
                     itemsHTML += createTripItemHTML(trip);
                 });
@@ -357,13 +429,17 @@
         async function fetchAndRenderHistory() {
             tripListContainer.innerHTML = '<p style="text-align: center; color: var(--color-secondary);"><i class="fas fa-spinner fa-spin"></i> Cargando historial...</p>';
             try {
+                // Se envía el request al archivo PHP en el backend
                 const response = await fetch(API_URL);
+                
                 if (!response.ok) {
                     throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
                 }
+                
                 const data = await response.json();
                 
                 if (data.error) {
+                    // Si el backend devuelve un error explícito (ej. "No hay sesión")
                     throw new Error(data.error);
                 }
                 
@@ -372,7 +448,7 @@
             } catch (error) {
                 console.error("Error al cargar el historial:", error);
                 // Mostrar un mensaje de error más claro en la interfaz
-                tripListContainer.innerHTML = `<p style="color: red; text-align: center;">Error al cargar el historial del servidor. Verifique ${API_URL}.</p>`;
+                tripListContainer.innerHTML = `<p style="color: red; text-align: center;">Error al cargar el historial del servidor. Verifique <code>${API_URL}</code> y asegúrese de que la sesión del usuario está activa.</p>`;
                 // Resetear sumarios a cero en caso de fallo
                 totalTripsElement.textContent = 0;
                 totalSpentElement.textContent = 'Bs. 0.00';

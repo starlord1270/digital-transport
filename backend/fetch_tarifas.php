@@ -13,20 +13,21 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
-    // 🛑 CONSULTA FINAL: Hace JOIN con TIPO_DESCUENTO para obtener el nombre 🛑
+    // 🛑 LÍNEA CORREGIDA: t.monto EN LUGAR DE t.monto_bs 🛑
     $sql = "
         SELECT 
             t.tarifa_id, 
             td.nombre AS nombre,     
-            t.monto_bs AS costo,           
+            t.monto AS costo,           -- <<-- CAMBIO APLICADO AQUÍ
             td.nombre AS tipo_pasajero     
         FROM 
             TARIFA t
         JOIN
             TIPO_DESCUENTO td ON t.tipo_desc_id = td.tipo_desc_id
         ORDER BY 
-            t.monto_bs DESC
+            t.monto DESC
     ";
+    // ---------------------------------------------
 
     $stmt = $pdo->query($sql);
     $tarifas = $stmt->fetchAll();

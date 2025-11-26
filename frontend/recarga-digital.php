@@ -1,33 +1,51 @@
 <?php
 /**
- * Archivo: recarga_usuario.php
+ * Archivo: recarga-digital.php
  * Descripción: Script unificado que maneja la vista de recarga (HTML/CSS/JS) y 
  * la lógica de inserción de la recarga a la BD.
  */
 
-// 1. INCLUIR CONEXIÓN A LA BASE DE DATOS
-// !!! RUTA ACTUALIZADA A bd.php !!!
+// 1. GESTIÓN DE SESIONES
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// 🛑 LÓGICA DE VERIFICACIÓN DE SESIÓN PARA PASAJERO (Para el Header) 🛑
+// CORRECCIÓN APLICADA: Se incluye el ID 1 (Pasajero) a la lista para consistencia
+$user_is_logged_in = (
+    isset($_SESSION['usuario_id']) && 
+    isset($_SESSION['tipo_usuario_id']) && 
+    in_array($_SESSION['tipo_usuario_id'], [1, 2, 5, 6]) 
+);
+
+$nombre_usuario = $user_is_logged_in ? htmlspecialchars($_SESSION['nombre_completo'] ?? 'Pasajero') : 'Invitado';
+$user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
+// 🛑 FIN LÓGICA DE SESIÓN 🛑
+
+
+// 2. INCLUIR CONEXIÓN A LA BASE DE DATOS
+// Asegúrate de que esta ruta sea correcta para tu proyecto
 require_once '../backend/bd.php'; 
 
 $status_message = ''; 
 $is_success = false;
 
 // ----------------------------------------------------
-// 2. LÓGICA DE PROCESAMIENTO DEL FORMULARIO (PHP)
+// 3. LÓGICA DE PROCESAMIENTO DEL FORMULARIO (PHP)
 // ----------------------------------------------------
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     // Recolección y saneamiento de datos
-    $card_id = trim($_POST['card_id'] ?? ''); // ID de la Tarjeta Digital Transport
+    $card_id = trim($_POST['card_id'] ?? ''); 
     $amount = filter_input(INPUT_POST, 'amount', FILTER_VALIDATE_FLOAT);
     $payment_method = trim($_POST['payment_method'] ?? '');
 
-    // Campos de Tarjeta (opcional, solo si payment_method es 'tarjeta')
+    // Campos de Tarjeta para Facturación (solo se envían si el método es 'tarjeta')
     $dni = trim($_POST['dni'] ?? '');
     $email = trim($_POST['email'] ?? '');
     
-    // 2.1. Validación básica de campos
+    // 3.1. Validación básica de campos
     if (empty($card_id) || $amount === false || $amount <= 0) {
         $status_message = 'Por favor, ingresa un ID de tarjeta válido y un monto de recarga positivo.';
     } else {
@@ -51,21 +69,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt_check->close();
 
             // Detalles de pago para la base de datos
-            $detalles_pago = "Pago Digital Vía Web - Método: " . strtoupper($payment_method);
+            $detalles_pago = "Recarga Digital Vía Web - Método: " . strtoupper($payment_method);
             
             // Validaciones Adicionales según el método
             $valid_additional_fields = true;
             if ($payment_method === 'tarjeta') {
                  if (empty($dni) || empty($email)) {
+                     // Esta validación también se hace en JS, pero es CRÍTICA en el backend.
                      $status_message = 'Error: Debes completar tu C.I. y Correo para la factura.';
                      $valid_additional_fields = false;
                  } else {
                      $detalles_pago .= " - Factura a C.I.: {$dni}, Correo: {$email}";
                  }
             }
+            if ($payment_method === 'pago_movil') {
+                $detalles_pago .= " - Pendiente de Confirmación QR";
+            }
             
             if (!$valid_additional_fields) {
-                goto end_post_processing; // Saltar al final si fallan las validaciones específicas
+                goto end_post_processing; 
             }
 
             // --- Paso 2: Iniciar Transacción (Actualización y Registro) ---
@@ -99,17 +121,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $is_success = true;
                 $status_message = "¡Recarga exitosa! Se han añadido " . number_format($amount, 2) . " Bs a tu tarjeta. Saldo actual: " . number_format($nuevo_saldo, 2) . " Bs.";
                 
+                // ⭐ ACTUALIZAR SALDO EN SESIÓN si el usuario recargó su propia tarjeta (simplificación)
+                if ($user_is_logged_in && isset($_SESSION['tarjeta_id']) && $_SESSION['tarjeta_id'] == $tarjeta_id) {
+                    $_SESSION['saldo'] = $nuevo_saldo; 
+                }
+                
             } catch (Exception $e) {
                 // Paso 4: Revertir Transacción si hay error
                 $conn->rollback();
+                // Opcional: Logear $e->getMessage()
                 $status_message = "Error en el procesamiento de la recarga: Transacción revertida."; 
             }
         }
     }
 }
-end_post_processing: // Etiqueta para el goto
+end_post_processing: 
 
-// 3. Manejo de mensajes de estado (después de POST)
+// 4. Manejo de mensajes de estado (después de POST)
 if (isset($_GET['status']) && isset($_GET['msg'])) {
     $status = $_GET['status'];
     $message = htmlspecialchars(urldecode($_GET['msg']));
@@ -501,14 +529,33 @@ if (isset($conn)) {
         </div>
         <nav class="nav-menu">
            <a href="index.php" class="nav-item">Inicio</a>
-            <a href="registro-usuarios.php" class="nav-item">Registro</a>
-            <a href="recarga-digital.php" class="nav-item">Recarga</a>
-            <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
-            <a href="mis-boletos.php" class="nav-item">Boletos</a>
-            <a href="historial-viaje.php" class="nav-item active">Historial</a> 
+            
+            <?php if ($user_is_logged_in): ?>
+                <a href="recarga-digital.php" class="nav-item active">Recarga</a>
+                <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
+                <a href="mis-boletos.php" class="nav-item">Boletos</a>
+                <a href="historial-viaje.php" class="nav-item">Historial</a> 
+                <a href="perfil-usuario.php" class="nav-item">
+                    <i class="fas fa-user-circle"></i> Perfil
+                </a>
+                <a href="../backend/logout.php?redirect=recarga-digital.php" class="nav-item">
+                    <i class="fas fa-sign-out-alt"></i> Salir
+                </a>
+            <?php else: ?>
+                 <a href="registro-usuarios.php" class="nav-item">Registro</a>
+                 <a href="recarga-digital.php" class="nav-item active">Recarga</a>
+                 <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
+                 <a href="inicio-sesion-usuarios.php" class="nav-item">Iniciar Sesión</a>
+            <?php endif; ?>
         </nav>
+        
         <div class="saldo">
-            Saldo: **$125.50** A
+            <?php if ($user_is_logged_in): ?>
+                <span style="margin-right: 15px; font-weight: 500;">¡Hola, <?php echo $nombre_usuario; ?>!</span>
+                Saldo: **Bs. <?php echo number_format($user_balance, 2); ?>**
+            <?php else: ?>
+                Saldo: **No Disponible**
+            <?php endif; ?>
         </div>
     </header>
 
@@ -522,7 +569,7 @@ if (isset($conn)) {
 
             <?php echo $status_message; ?>
 
-            <form action="recarga_usuario.php" method="POST" id="recarga-form">
+            <form action="recarga-digital.php" method="POST" id="recarga-form">
 
                 <section class="form-section" style="background-color: white; border: none; padding: 0;">
                     <p style="font-size: 0.95em; color: var(--color-text-dark); margin-bottom: 10px;">Ingresa el ID de tu tarjeta Digital Transport</p>
@@ -645,24 +692,24 @@ if (isset($conn)) {
                 <h3><i class="fas fa-credit-card" style="color: var(--color-primary);"></i> Detalles de la Tarjeta</h3>
                 <div class="card-form-group full-width">
                     <label for="card-number">Número de Tarjeta <span style="color: red;">*</span></label>
-                    <input type="text" id="card-number" name="card_number_js" placeholder="XXXX XXXX XXXX XXXX" required>
+                    <input type="text" id="card-number" placeholder="XXXX XXXX XXXX XXXX" required> 
                 </div>
 
                 <div class="card-form-grid">
                     <div class="card-form-group">
                         <label for="card-expiry">Fecha Vencimiento (MM/AA) <span style="color: red;">*</span></label>
-                        <input type="text" id="card-expiry" name="card_expiry_js" placeholder="MM/AA" required pattern="(0[1-9]|1[0-2])\/?([0-9]{2})">
+                        <input type="text" id="card-expiry" placeholder="MM/AA" required pattern="(0[1-9]|1[0-2])\/?([0-9]{2})">
                     </div>
                     <div class="card-form-group">
                         <label for="card-cvn">CVN/CVC <span style="color: red;">*</span></label>
-                        <input type="text" id="card-cvn" name="card_cvn_js" placeholder="123" required pattern="[0-9]{3,4}">
+                        <input type="text" id="card-cvn" placeholder="123" required pattern="[0-9]{3,4}">
                         <div class="cvn-tip">Código de 3 o 4 dígitos al reverso.</div>
                     </div>
                 </div>
                 
                 <div class="card-form-group full-width" style="margin-top: 15px;">
                     <label for="card-name">Nombre y Apellido del Titular <span style="color: red;">*</span></label>
-                    <input type="text" id="card-name" name="card_name_js" placeholder="Como aparece en la tarjeta" required>
+                    <input type="text" id="card-name" placeholder="Como aparece en la tarjeta" required>
                 </div>
                 
                 <h3 style="margin-top: 30px;"><i class="fas fa-receipt" style="color: var(--color-primary);"></i> Datos para Facturación</h3>
@@ -670,11 +717,11 @@ if (isset($conn)) {
                 <div class="card-form-grid">
                     <div class="card-form-group">
                         <label for="dni">Carnet de Identidad / NIT <span style="color: red;">*</span></label>
-                        <input type="text" id="dni" name="dni" placeholder="C.I. o NIT" required>
+                        <input type="text" id="dni" placeholder="C.I. o NIT" required> 
                     </div>
                     <div class="card-form-group">
                         <label for="email">Correo Electrónico (Para factura) <span style="color: red;">*</span></label>
-                        <input type="email" id="email" name="email" placeholder="correo@ejemplo.com" required>
+                        <input type="email" id="email" placeholder="correo@ejemplo.com" required>
                     </div>
                 </div>
             </div>
@@ -698,20 +745,11 @@ if (isset($conn)) {
             const selectedMethod = paymentMethodInput.value;
             let displayHtml = '';
 
-            // Limpiar nombres de campos de formularios no usados (solo para los que se inyectan)
+            // Limpieza: Asegurar que los campos inyectados no tienen 'name'
             paymentDetailsContainer.querySelectorAll('input, select').forEach(el => {
-                // Si el nombre del campo termina en '_js', lo eliminamos. 
-                // Esto es para que los datos sensibles (card_number) no lleguen a PHP.
-                if (el.name && el.name.endsWith('_js')) {
-                    el.removeAttribute('name');
-                }
-                // Si el campo es 'dni' o 'email', también eliminamos su 'name' si no se va a usar
-                if (el.name === 'dni' || el.name === 'email') {
-                     el.removeAttribute('name');
-                }
+                el.removeAttribute('name');
             });
 
-            // Ocultar cualquier error JS anterior
             jsErrorMessage.style.display = 'none';
 
             if (selectedMethod === 'pago_movil') {
@@ -719,21 +757,22 @@ if (isset($conn)) {
             } else if (selectedMethod === 'tarjeta') {
                 displayHtml = CARD_PAYMENT_HTML;
             } else {
-                // Esto manejaría el caso de 'billetera' deshabilitada
                 displayHtml = '<p style="text-align: center; color: #999;">Selecciona un método de pago para ver los detalles.</p>';
             }
 
             // Inyectar el HTML
             paymentDetailsContainer.innerHTML = displayHtml;
             
-            // Re-agregar los atributos 'name' necesarios para PHP
+            // Re-agregar los atributos 'name' necesarios SOLO para PHP (DNI y Email)
             if (selectedMethod === 'tarjeta') {
-                 // Solo necesitamos enviar DNI y Email al backend para el registro de la transacción/factura
-                 document.getElementById('dni').setAttribute('name', 'dni');
-                 document.getElementById('email').setAttribute('name', 'email');
-                 
-                 // Los campos sensibles de la tarjeta se quedan sin name (usamos el '_js' para referenciarlos en JS, 
-                 // pero como el name no es 'dni' o 'email' y no termina en '_js', no se elimina en la limpieza inicial)
+                 // Estos campos sí se envían al backend para el registro de la transacción/factura.
+                 // Usamos 'setTimeout' para asegurar que los elementos se han añadido al DOM
+                 setTimeout(() => {
+                    const dniElement = document.getElementById('dni');
+                    const emailElement = document.getElementById('email');
+                    if (dniElement) dniElement.setAttribute('name', 'dni');
+                    if (emailElement) emailElement.setAttribute('name', 'email');
+                 }, 0);
             }
 
             // Actualizar el monto dentro de la plantilla inyectada
@@ -748,24 +787,35 @@ if (isset($conn)) {
         }
 
 
-        // 1. Manejo de Tarjetas Predefinidas
+        // 1. Manejo de Tarjetas Predefinidas y Sincronización
         function syncAmountCards(currentAmount) {
             let foundMatch = false;
+            
+            // Convertir a float para una comparación precisa, manejando el input del usuario que puede ser string
+            const floatCurrentAmount = parseFloat(currentAmount);
+
             amountCards.forEach(card => {
-                const cardAmount = card.getAttribute('data-amount');
-                if (cardAmount === currentAmount) {
+                const cardAmount = parseFloat(card.getAttribute('data-amount'));
+
+                // Usamos la comparación de flotantes
+                if (floatCurrentAmount === cardAmount) {
                     card.classList.add('selected');
                     foundMatch = true;
                 } else {
                     card.classList.remove('selected');
                 }
             });
+            
+            // Si el monto no coincide con ninguna tarjeta predefinida, deseleccionamos todas.
             if (!foundMatch) {
                  amountCards.forEach(c => c.classList.remove('selected'));
             }
-            updateAmountInTemplates(currentAmount); // Actualizar los detalles de pago al cambiar el monto
+            
+            // Siempre actualizar el display del monto en las plantillas (ej: QR)
+            updateAmountInTemplates(currentAmount); 
         }
 
+        // 1.1. Event listener para Tarjetas Predefinidas
         amountCards.forEach(card => {
             card.addEventListener('click', function() {
                 const amount = this.getAttribute('data-amount');
@@ -774,8 +824,9 @@ if (isset($conn)) {
             });
         });
         
-        // 2. Sincronización con el Monto Personalizado
+        // 2. Event listener para Monto Personalizado
         customInput.addEventListener('input', function() {
+            // Se llama a syncAmountCards, que a su vez llama a updateAmountInTemplates
             syncAmountCards(this.value);
         });
 
@@ -790,11 +841,11 @@ if (isset($conn)) {
                 const selectedMethod = this.getAttribute('data-method');
                 paymentMethodInput.value = selectedMethod;
                 
-                // Mostrar la interfaz dinámica
+                 // Mostrar la interfaz dinámica
                 updatePaymentDisplay();
             });
         });
-        
+
         // 4. Validación Final con JS antes de enviar a PHP
         form.addEventListener('submit', function(e) {
             const cardId = document.getElementById('card-id').value.trim();
@@ -809,15 +860,18 @@ if (isset($conn)) {
             // Validaciones específicas del método
             if (!validationError) {
                 if (selectedMethod === 'tarjeta') {
-                    // Validar campos sensibles (solo en frontend para este ejemplo)
-                    const cardNumber = document.getElementById('card-number').value.replace(/\s/g, '');
-                    const cardExpiry = document.getElementById('card-expiry').value;
-                    const cardCvn = document.getElementById('card-cvn').value;
-                    const cardName = document.getElementById('card-name').value.trim();
-                    const dni = document.getElementById('dni').value.trim();
-                    const email = document.getElementById('email').value.trim();
+                    // Validar campos sensibles de tarjeta (solo en frontend, ya que no se envían a PHP)
+                    const cardNumber = document.getElementById('card-number')?.value.replace(/\s/g, '');
+                    const cardExpiry = document.getElementById('card-expiry')?.value;
+                    const cardCvn = document.getElementById('card-cvn')?.value;
+                    const cardName = document.getElementById('card-name')?.value.trim();
+                    
+                    // Validar campos para la factura (que SÍ se envían a PHP)
+                    const dni = document.getElementById('dni')?.value.trim();
+                    const email = document.getElementById('email')?.value.trim();
 
-                    if (cardNumber.length < 15 || cardExpiry.length < 5 || cardCvn.length < 3 || cardName === "") {
+                    // Utilizamos optional chaining (?) y verificamos existencia para mayor seguridad
+                    if (!cardNumber || cardNumber.length < 15 || !cardExpiry || cardExpiry.length < 5 || !cardCvn || cardCvn.length < 3 || cardName === "") {
                         validationError = 'Error: Por favor, verifica todos los datos de la tarjeta.';
                     } else if (dni === "" || email === "") {
                         validationError = 'Error: Debes ingresar el C.I. y el Correo para la factura.';
@@ -838,7 +892,9 @@ if (isset($conn)) {
 
         // 5. Inicialización
         document.addEventListener('DOMContentLoaded', () => {
+             // Sincronizar el monto inicial (50 Bs)
              syncAmountCards(customInput.value); 
+             // Inicializar la vista del método de pago (Pago Móvil por defecto)
              updatePaymentDisplay(); 
          });
 

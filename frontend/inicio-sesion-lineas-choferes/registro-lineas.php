@@ -12,7 +12,13 @@
         h2 { color: #333; margin-bottom: 20px; font-size: 1.5em; }
         .form-group { margin-bottom: 15px; text-align: left; }
         label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
-        input[type="text"], input[type="email"], input[type="password"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        input[type="text"], input[type="email"], input[type="password"], select { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            box-sizing: border-box; /* Asegura que el padding no desborde el ancho */
+        }
         .btn-group { display: flex; justify-content: space-around; margin-bottom: 20px; }
         .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.3s; width: 48%; position: relative;}
         .btn-secondary { background-color: #6c757d; color: white; }
@@ -68,7 +74,25 @@
                 </div>
                 <div class="form-group">
                     <label for="linea_id_admin">ID de Línea/Ruta:</label>
-                    <input type="text" id="linea_id_admin" name="linea_id" placeholder="Ej: 1 (ID de la tabla LINEA)" required>
+                    <select id="linea_id_admin" name="linea_id" required>
+                        <option value="">-- Seleccione una Línea --</option>
+                        <option value="1">Línea Central (Admin Maestro)</option>
+                        <option value="2">Línea 1 - Ruta Norte</option>
+                        <option value="103">Línea 103</option>
+                        <option value="106">Línea 106</option>
+                        <option value="108">Línea 108</option>
+                        <option value="110">Línea 110</option>
+                        <option value="115">Línea 115</option>
+                        <option value="123">Línea 123</option>
+                        <option value="130">Línea 130</option>
+                        <option value="209">Línea 209</option>
+                        <option value="224">Línea 224</option>
+                        <option value="240">Línea 240</option>
+                        <option value="244">Línea 244</option>
+                        <option value="260">Línea 260</option>
+                        <option value="270">Línea 270</option>
+                        <option value="290">Línea 290</option>
+                    </select>
                 </div>
             </div>
 
@@ -83,7 +107,25 @@
                 </div>
                 <div class="form-group">
                     <label for="linea_id_chofer">ID de Línea Asignada:</label>
-                    <input type="text" id="linea_id_chofer" name="linea_id_chofer_input_disabled" placeholder="Ej: 1 (ID de la tabla LINEA)" required disabled> 
+                    <select id="linea_id_chofer" name="linea_id_chofer_input_disabled" required disabled> 
+                        <option value="">-- Seleccione una Línea --</option>
+                        <option value="1">Línea Central (Admin Maestro)</option>
+                        <option value="2">Línea 1 - Ruta Norte</option>
+                        <option value="103">Línea 103</option>
+                        <option value="106">Línea 106</option>
+                        <option value="108">Línea 108</option>
+                        <option value="110">Línea 110</option>
+                        <option value="115">Línea 115</option>
+                        <option value="123">Línea 123</option>
+                        <option value="130">Línea 130</option>
+                        <option value="209">Línea 209</option>
+                        <option value="224">Línea 224</option>
+                        <option value="240">Línea 240</option>
+                        <option value="244">Línea 244</option>
+                        <option value="260">Línea 260</option>
+                        <option value="270">Línea 270</option>
+                        <option value="290">Línea 290</option>
+                    </select>
                 </div>
             </div>
             
@@ -102,10 +144,12 @@
             const adminFields = document.getElementById('adminFields');
             const choferFields = document.getElementById('choferFields');
             const cargoInput = document.getElementById('cargo');
-            const lineaAdminInput = document.getElementById('linea_id_admin');
+            // Elementos SELECT para la línea (ahora son select, no inputs de texto)
+            const lineaAdminSelect = document.getElementById('linea_id_admin'); 
             const licenciaInput = document.getElementById('licencia');
             const vehiculoPlacaInput = document.getElementById('vehiculo_placa'); 
-            const lineaChoferInput = document.getElementById('linea_id_chofer');
+            const lineaChoferSelect = document.getElementById('linea_id_chofer');
+            
             const ROLE_CHOFER = 3;
             const ROLE_ADMIN = 4;
             const form = document.getElementById('registroForm');
@@ -123,15 +167,15 @@
 
                     adminFields.classList.remove('hidden');
                     cargoInput.removeAttribute('disabled');
-                    lineaAdminInput.removeAttribute('disabled');
-                    lineaAdminInput.name = 'linea_id';
+                    lineaAdminSelect.removeAttribute('disabled');
+                    lineaAdminSelect.name = 'linea_id'; // Habilitar el select del Admin
                     cargoInput.name = 'cargo';
                     
                     choferFields.classList.add('hidden');
                     licenciaInput.setAttribute('disabled', 'disabled');
                     vehiculoPlacaInput.setAttribute('disabled', 'disabled'); 
-                    lineaChoferInput.setAttribute('disabled', 'disabled');
-                    lineaChoferInput.name = 'linea_id_chofer_input_disabled';
+                    lineaChoferSelect.setAttribute('disabled', 'disabled');
+                    lineaChoferSelect.name = 'linea_id_chofer_input_disabled';
                     licenciaInput.name = 'licencia_disabled'; 
                     vehiculoPlacaInput.name = 'vehiculo_placa_disabled'; 
                 } else if (roleId === ROLE_CHOFER) {
@@ -143,15 +187,15 @@
                     choferFields.classList.remove('hidden');
                     licenciaInput.removeAttribute('disabled');
                     vehiculoPlacaInput.removeAttribute('disabled'); 
-                    lineaChoferInput.removeAttribute('disabled');
-                    lineaChoferInput.name = 'linea_id';
+                    lineaChoferSelect.removeAttribute('disabled');
+                    lineaChoferSelect.name = 'linea_id'; // Habilitar el select del Chofer
                     licenciaInput.name = 'licencia';
                     vehiculoPlacaInput.name = 'vehiculo_placa';
 
                     adminFields.classList.add('hidden');
                     cargoInput.setAttribute('disabled', 'disabled');
-                    lineaAdminInput.setAttribute('disabled', 'disabled');
-                    lineaAdminInput.name = 'linea_id_admin_input_disabled'; 
+                    lineaAdminSelect.setAttribute('disabled', 'disabled');
+                    lineaAdminSelect.name = 'linea_id_admin_input_disabled'; 
                     cargoInput.name = 'cargo_disabled';
                 }
             }
@@ -168,7 +212,7 @@
             form.addEventListener('submit', function(e) {
                 e.preventDefault(); 
 
-                // RUTA HACIA EL BACKEND (subir dos carpetas desde el archivo actual)
+                // RUTA HACIA EL BACKEND (Ajusta si es necesario)
                 const targetUrl = '../../backend/validacion-registro.php'; 
 
                 // Mostrar estado de carga
@@ -184,7 +228,16 @@
                     body: formData
                 })
                 .then(response => {
-                    return response.json(); 
+                    // Verificar si la respuesta es JSON antes de parsear
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.indexOf("application/json") !== -1) {
+                        return response.json();
+                    } else {
+                        // Si no es JSON (ej: error 500), intentar leer como texto
+                        return response.text().then(text => {
+                             throw new Error("Respuesta no JSON: " + text);
+                        });
+                    }
                 })
                 .then(data => {
                     // Mostrar el mensaje devuelto por el PHP
@@ -194,7 +247,7 @@
                         messageElement.style.backgroundColor = '#d4edda'; 
                         messageElement.style.color = '#155724';
                         
-                        // 🔑 CAMBIO CLAVE: Redirige a login.php, ya que está en la misma carpeta
+                        // Redirige al login
                         setTimeout(() => {
                             window.location.href = 'login.php'; 
                         }, 2000); 
@@ -206,9 +259,9 @@
                     }
                 })
                 .catch(error => {
-                    // Manejar errores de red/servidor
+                    // Manejar errores de red/servidor (incluyendo el error no JSON)
                     console.error('Error de comunicación con el servidor:', error);
-                    messageElement.textContent = 'Error de red. Asegúrese de que el servidor Apache esté activo.';
+                    messageElement.textContent = 'Error crítico de servidor. Revise la consola (F12) o la ruta del backend.';
                     messageElement.style.backgroundColor = '#f8d7da';
                     messageElement.style.color = '#721c24';
                 });

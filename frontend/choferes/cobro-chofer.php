@@ -1,3 +1,44 @@
+<?php
+// cobro-chofer.php
+
+// 1. Iniciar la sesión para acceder a los datos
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
+
+// 🛑 INICIO DE VERIFICACIÓN DE SEGURIDAD Y ROL (RBAC) 🛑
+// Tipo de usuario esperado para esta página: 3 (CHOFER)
+$user_type_expected = 3;
+$user_type_actual = isset($_SESSION['tipo_usuario_id']) ? $_SESSION['tipo_usuario_id'] : 0;
+
+$es_chofer_logueado = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && $user_type_actual == $user_type_expected;
+
+if (!$es_chofer_logueado) {
+    // Si no es un Chofer logueado, destruir la sesión y redirigir.
+    session_unset();
+    session_destroy();
+    
+    $login_url = '/Competencia-Analisis/digital-transport/frontend/inicio-sesion-lineas-choferes/login.php';
+    header("Location: " . $login_url . "?error=acceso_no_autorizado");
+    exit;
+}
+
+// 2. Obtener el nombre
+$nombre_chofer = "Chofer"; // Valor por defecto
+if (isset($_SESSION['nombre_completo'])) {
+    $nombre_completo = $_SESSION['nombre_completo'];
+    
+    // Obtener solo el nombre y el primer apellido
+    $partes_nombre = explode(' ', $nombre_completo);
+    
+    // Tomar el primer elemento (Nombre) y el segundo (Primer Apellido)
+    if (count($partes_nombre) >= 2) {
+        $nombre_chofer = $partes_nombre[0] . ' ' . $partes_nombre[1];
+    } else {
+        $nombre_chofer = $partes_nombre[0];
+    }
+} 
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -43,7 +84,52 @@
             align-items: flex-start;
             margin-bottom: 20px;
         }
+        
+        /* Contenedor de logo, nombre y botones de utilidad */
+        .utility-menu {
+            display: flex;
+            flex-direction: column; /* Apila el logo y los botones */
+        }
+        
         .logo h1 { font-size: 1.5em; margin: 0; color: white; }
+        .logo span { font-size: 0.8em; opacity: 0.7; }
+        
+        /* ⭐ NUEVOS ESTILOS PARA LOS BOTONES DE ACCIÓN ⭐ */
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .action-buttons a {
+            font-size: 0.9em;
+            text-decoration: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Botón Perfil */
+        .profile-btn-chofer {
+            background-color: var(--color-secondary);
+        }
+        .profile-btn-chofer:hover {
+            background-color: #1a76c8;
+        }
+
+        /* Botón de Cerrar Sesión */
+        .logout-btn-chofer {
+            background-color: var(--color-error);
+        }
+        .logout-btn-chofer:hover {
+            background-color: #d32f2f;
+        }
+        
+        /* Recaudación */
         .recaudacion { 
             font-size: 1em; 
             font-weight: 600; 
@@ -56,6 +142,7 @@
             display: block;
             color: var(--color-success);
         }
+        /* --- Fin Header y Recaudación --- */
 
         /* --- Contenedor Principal --- */
         .cobro-container {
@@ -92,7 +179,7 @@
         #qr-reader {
             margin-bottom: 30px;
             border-radius: 8px;
-            overflow: hidden; /* Asegura que el video se vea bien */
+            overflow: hidden; 
             background-color: #3e4860;
             padding: 10px;
         }
@@ -198,9 +285,20 @@
 <body>
 
     <header class="header">
-        <div class="logo">
-            <h1>Vista Pasajero</h1>
-            <span style="font-size: 0.8em; opacity: 0.7;">Vista Chofer - Listo a bordo</span>
+        <div class="utility-menu">
+            <div class="logo">
+                <h1>¡Hola, <?php echo htmlspecialchars($nombre_chofer); ?>!</h1>
+                <span style="font-size: 0.8em; opacity: 0.7;">Vista Chofer - Listo a bordo</span>
+            </div>
+            
+            <div class="action-buttons">
+                <a href="../dashboard-admin-linea/perfil-chofer.php" class="profile-btn-chofer" title="Ir a mi Perfil">
+                    <i class="fas fa-user-circle"></i> Perfil
+                </a>
+                <a href="../../backend/logout.php" class="logout-btn-chofer" title="Cerrar Sesión">
+                    <i class="fas fa-sign-out-alt"></i> Salir
+                </a>
+            </div>
         </div>
         <div class="recaudacion">
             Recaudación Hoy: <span id="recaudacion-hoy">0.00 Bs</span>
@@ -257,7 +355,6 @@
         const API_PROCESAR_COBRO = '../../backend/procesar_cobro.php';
         
         const tariffContainer = document.getElementById('tariff-selection-container');
-        // El input 'qr-input' ya no se usa, pero lo dejamos si es necesario
         const scanPlaceholder = document.getElementById('scan-area-placeholder'); 
         const qrReader = document.getElementById('qr-reader');
         const statusMessage = document.getElementById('status-message');

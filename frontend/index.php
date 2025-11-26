@@ -1,30 +1,34 @@
 <?php
-// PHP para simular el estado de inicio de sesión.
-// En un entorno real, esto se haría usando $_SESSION.
-
 // 1. Iniciar la sesión (si no está iniciada)
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// 2. Simular el estado de login y datos del usuario
-// 🛑 AJUSTA ESTA LÓGICA CON TU SISTEMA REAL DE SESIONES 🛑
+// 🛑 LÓGICA DE VERIFICACIÓN DE SESIÓN PARA PASAJERO (tipo_usuario_id = 1) 🛑
 
-$user_is_logged_in = false; 
-$user_balance = 0.00;
+// Verificar si el usuario ha iniciado sesión Y si es un PASAJERO (tipo_usuario_id = 1)
+// NOTA: Asumo que 1 es el ID para Pasajero/Usuario.
+$user_is_logged_in = (
+    isset($_SESSION['usuario_id']) && 
+    ($_SESSION['tipo_usuario_id'] == 1) // 1 es para Pasajero/Usuario
+);
 
-// Ejemplo de cómo se vería si el usuario estuviera logueado (solo para prueba)
-// if (isset($_SESSION['user_id'])) {
-//     $user_is_logged_in = true;
-//     $user_balance = obtener_saldo_de_bd($_SESSION['user_id']); 
-// }
+$nombre_usuario = $user_is_logged_in ? htmlspecialchars($_SESSION['nombre_completo'] ?? 'Pasajero') : 'Invitado';
 
-// Para la demostración, estableceremos el login a true para ver cómo se muestra, luego a false:
-// $user_is_logged_in = true;
-// $user_balance = 125.50; 
-// -------------------------------------------------------------
-// *Dejamos $user_is_logged_in = false; por defecto para ocultar el saldo.*
-// -------------------------------------------------------------
+// El saldo DEBE ser cargado en la sesión cuando el usuario inicia sesión O actualizado después de una recarga.
+// Si el saldo no está en la sesión, se usa 0.00.
+$user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00; 
+
+// 🛑 FIN LÓGICA DE SESIÓN 🛑
+
+// 🚀 LÓGICA PARA MOSTRAR MENSAJE DE ÉXITO POST-LOGIN (REQUIERE QUE login.php LO ESTABLEZCA)
+$success_message = '';
+if (isset($_SESSION['login_success_message'])) {
+    // Si el mensaje existe, lo guardamos y lo limpiamos de la sesión para que no se muestre de nuevo
+    $success_message = $_SESSION['login_success_message'];
+    unset($_SESSION['login_success_message']); 
+}
+// 🚀 FIN LÓGICA MENSAJE 
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -75,17 +79,26 @@ $user_balance = 0.00;
         }
 
         .logo { font-size: 1.2em; font-weight: bold; color: var(--color-primary); }
-        .nav-menu { display: flex; gap: 20px; }
-        .nav-item { color: var(--color-text-dark); text-decoration: none; padding: 5px 10px; border-radius: 5px; font-size: 0.95em; }
+        /* Permite que el menú se envuelva en móviles */
+        .nav-menu { display: flex; gap: 20px; flex-wrap: wrap; justify-content: flex-end; } 
+        .nav-item { color: var(--color-text-dark); text-decoration: none; padding: 5px 10px; border-radius: 5px; font-size: 0.95em; transition: background-color 0.2s; }
         .nav-item.active { background-color: #f0f0f0; font-weight: 500; }
         
-        /* Estilos del Saldo */
+        /* Estilos del Saldo y Nombre */
         .saldo { 
             font-size: 1em; 
             color: var(--color-text-dark); 
             font-weight: 600; 
-            display: flex; /* Para centrar el botón de recarga si se añade */
+            display: flex; 
             align-items: center;
+            margin-left: 20px; /* Espacio para separarlo del menú */
+        }
+        
+        /* ⭐ Nuevo estilo para el mensaje de éxito */
+        .alert-success {
+            background-color: #e6ffe6;
+            color: #4caf50;
+            border: 1px solid #4caf50;
         }
         
         /* --- Contenido Principal --- */
@@ -235,9 +248,9 @@ $user_balance = 0.00;
 
         /* Media Query para responsividad básica */
         @media (max-width: 900px) {
-            .header { flex-wrap: wrap; justify-content: center; gap: 10px; }
+            .header { flex-wrap: wrap; justify-content: space-between; gap: 10px; }
             .nav-menu { order: 3; width: 100%; justify-content: center; }
-            .saldo { order: 2; }
+            .saldo { order: 2; margin-left: 0; }
             
             .card-container { flex-direction: column; align-items: center; }
             .tariff-card { width: 90%; }
@@ -261,24 +274,43 @@ $user_balance = 0.00;
             Digital Transport
             <span style="font-size: 0.7em; display: block; font-weight: normal; color: #666;">Sistema de Boletos Digitales</span>
         </div>
+        
         <nav class="nav-menu">
-            <a href="inicio-sesion-usuarios.php" class="nav-item">Iniciar Sesión</a> 
-            <a href="registro-usuarios.php" class="nav-item">Registro</a>
-            <a href="recarga-digital.php" class="nav-item">Recarga</a>
-            <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
-            <a href="mis-boletos.php" class="nav-item">Boletos</a>
-            <a href="historial-viaje.php" class="nav-item">Historial</a>
+            <?php if ($user_is_logged_in): ?>
+                <a href="index.php" class="nav-item active">Inicio</a>
+                <a href="recarga-digital.php" class="nav-item">Recarga</a>
+                <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
+                <a href="mis-boletos.php" class="nav-item">Boletos</a>
+                <a href="historial-viaje.php" class="nav-item">Historial</a>
+                <a href="perfil-pasajero.php" class="nav-item">
+                    <i class="fas fa-user-circle"></i> Perfil
+                </a>
+                <a href="../backend/logout.php?redirect=index.php" class="nav-item">
+                    <i class="fas fa-sign-out-alt"></i> Salir
+                </a>
+            <?php else: ?>
+                <a href="index.php" class="nav-item active">Inicio</a>
+                <a href="inicio-sesion-usuarios.php" class="nav-item">Iniciar Sesión</a> 
+                <a href="registro-usuarios.php" class="nav-item">Regístrate</a>
+            <?php endif; ?>
         </nav>
         
         <?php if ($user_is_logged_in): ?>
         <div class="saldo">
-            Saldo: **Bs. <?php echo number_format($user_balance, 2); ?>**
+            <span style="margin-right: 15px; font-weight: 500;">¡Hola, <?php echo $nombre_usuario; ?>!</span>
+            Saldo: <span style="font-weight: 700;">Bs. <?php echo number_format($user_balance, 2); ?></span>
         </div>
         <?php endif; ?>
     </header>
 
     <div class="page-content-wrapper">
         <div class="main-content">
+        
+            <?php if (!empty($success_message)): ?>
+                <div class="alert-success" style="padding: 15px; margin-bottom: 20px; border-radius: 8px; font-weight: 500;">
+                    <i class="fas fa-check-circle"></i> <?php echo $success_message; ?>
+                </div>
+            <?php endif; ?>
         
             <div class="banner-container">
                 <p class="subtitle">Sistema de Boletos Digital</p>

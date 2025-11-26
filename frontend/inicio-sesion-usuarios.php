@@ -1,3 +1,22 @@
+<?php
+/**
+ * Archivo: inicio-sesion-usuarios.php
+ * Descripción: Formulario de inicio de sesión para pasajeros.
+ */
+
+// 1. GESTIÓN DE SESIONES
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// 🛑 VERIFICACIÓN DE SESIÓN 🛑
+// Si el usuario ya está logueado (tiene un usuario_id en sesión), redirigir a la página de inicio.
+if (isset($_SESSION['usuario_id'])) {
+    header("Location: index.php");
+    exit();
+}
+// 🛑 FIN VERIFICACIÓN DE SESIÓN 🛑
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -103,7 +122,8 @@
             position: absolute;
             right: 15px;
             top: 50%; 
-            transform: translateY(10px);
+            /* Ajuste el ícono para que esté centrado con el input */
+            transform: translateY(calc(50% + 5px)); 
             color: #999;
         }
 
@@ -162,6 +182,7 @@
             border-radius: 5px;
             font-size: 0.9em;
             display: none; /* Oculto por defecto */
+            text-align: center;
         }
         .alert-error {
             background-color: #fdeaea;
@@ -221,7 +242,7 @@
         </form>
         
         <div class="register-link">
-            ¿No tienes cuenta? <a href="registro_usuario.php">Regístrate aquí</a>
+            ¿No tienes cuenta? <a href="registro-usuarios.php">Regístrate aquí</a>
         </div>
 
     </div>
@@ -235,11 +256,13 @@
             messageArea.style.display = 'none'; // Ocultar mensajes anteriores
 
             const data = {
-                email: form.email.value,
+                // El campo 'email' acepta correo o ID de usuario para flexibilidad
+                email: form.email.value, 
                 password: form.password.value
             };
 
             // Intentar autenticar al usuario usando el endpoint PHP unificado
+            // Ruta asumida: frontend/../backend/login.php
             fetch('../backend/login.php', {
                 method: 'POST',
                 headers: {
@@ -262,15 +285,11 @@
                     messageArea.classList.add('alert-success');
                     messageArea.style.display = 'block';
 
-                    // Redirección al dashboard específico del rol
-                    if (data.redirect_url) {
-                        window.location.href = data.redirect_url;
-                    } else {
-                        // En caso de que PHP no envíe una URL por algún error
-                        messageArea.textContent = 'Autenticación exitosa, pero la URL de redirección no se encontró.';
-                        messageArea.classList.remove('alert-success');
-                        messageArea.classList.add('alert-error');
-                    }
+                    // Redirección. Si el backend proporciona una URL de redirección (por ejemplo, después de intentar acceder a una página restringida), úsala. De lo contrario, ir a 'index.php'.
+                    setTimeout(() => {
+                         window.location.href = data.redirect_to || 'index.php';
+                    }, 500); // Pequeña pausa para que el usuario vea el mensaje
+
                 } else {
                     // Muestra el error de credenciales devuelto por PHP
                     messageArea.textContent = data.error || 'Credenciales no válidas.';

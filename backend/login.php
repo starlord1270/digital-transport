@@ -59,10 +59,14 @@ try {
         $tipo_id = (int)$user['tipo_usuario_id'];
         $redirect_url = '';
         
-        // Almacenar datos críticos en la sesión
-        $_SESSION['user_id'] = $user['usuario_id'];
-        $_SESSION['user_nombre'] = $user['nombre_completo'];
-        $_SESSION['user_tipo_id'] = $tipo_id;
+        // ⭐ Corregir nombres de sesión para consistencia con index.php
+        $_SESSION['usuario_id'] = $user['usuario_id'];
+        $_SESSION['nombre_completo'] = $user['nombre_completo']; 
+        $_SESSION['tipo_usuario_id'] = $tipo_id;
+
+        // ⚠️ IMPORTANTE: Añadir placeholder para saldo, DEBES BUSCAR EL VALOR REAL DE LA BD
+        // por ejemplo: $user_balance = obtener_saldo_de_tarjeta($user['usuario_id']);
+        $_SESSION['saldo'] = 0.00; 
 
         // 4. LÓGICA DE REDIRECCIÓN BASADA EN ROL
         switch ($tipo_id) {
@@ -78,7 +82,11 @@ try {
             case 2: // ESTUDIANTE (Pasajero)
             case 5: // ADULTO (Pasajero)
             case 6: // ADULTO_MAYOR (Pasajero)
-                $redirect_url = '/vistas/pasajero/home.html';
+                // ⭐ Establecer el mensaje de éxito para que index.php lo muestre (Flash message)
+                $_SESSION['login_success_message'] = "¡Bienvenido, " . $user['nombre_completo'] . "! Has iniciado sesión correctamente.";
+                
+                // ⭐ Redirección para el pasajero a la raíz (index.php)
+                $redirect_url = '/index.php'; 
                 break;
             default:
                 // Error de rol desconocido o inactivo
