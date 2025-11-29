@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.3/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true">
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>./tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory>./tests/Integration</directory>
+        </testsuite>
+    </testsuites>
+
+    <php>
+        <const name="DB_TEST_HOST" value="127.0.0.1"/> 
+        <const name="DB_TEST_USER" value="root"/>
+        <const name="DB_TEST_PASS" value=""/> 
+        <const name="DB_TEST_NAME" value="digital_transport_test"/>
+    </php>
+</phpunit>
