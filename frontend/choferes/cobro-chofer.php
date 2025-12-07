@@ -590,7 +590,82 @@ if (isset($_SESSION['nombre_completo'])) {
         // Cargar tarifas al inicio
         document.addEventListener('DOMContentLoaded', () => {
             fetchTarifas();
+            fetchRecaudacionHoy(); // 🛑 NUEVO: Cargar lo recaudado al iniciar
         });
+        
+        // ----------------------------------------------------
+        // VI. PERSISTENCIA DE DATOS (NUEVO)
+        // ----------------------------------------------------
+        const API_FETCH_RECAUDACION = '../../backend/fetch_recaudacion_chofer.php';
+
+        async function fetchRecaudacionHoy() {
+            try {
+                const response = await fetch(API_FETCH_RECAUDACION);
+                const data = await response.json();
+
+                if (!data.success) {
+                    console.warn("No se pudo obtener la recaudación histórica:", data.error);
+                    return;
+                }
+
+                // 1. Restaurar el Total Recaudado
+                // Aseguramos que data.total_recaudado sea un número
+                const totalServidor = parseFloat(data.total_recaudado) || 0;
+                
+                // Actualizamos nuestra variable local solo si es mayor (para evitar inconsistencias raras, 
+                // aunque lo ideal es confiar en el servidor). En este caso, confiamos en el servidor al inicio.
+                recaudacionTotal = totalServidor;
+                
+                const formattedTotal = recaudacionTotal.toFixed(2) + ' Bs';
+                recaudacionHoySpan.textContent = formattedTotal;
+                footerRecaudacionSpan.textContent = formattedTotal;
+
+                // 2. Restaurar Contadores (Estimación basada en montos)
+                // Esto es necesario porque el backend nos da un desglose por monto, no por "tipo" exacto si no guardamos el ID tarifa en cobro.
+                // Pero podemos inferirlo comparando con las tarifas cargadas.
+                
+                if (tarifasData.length === 0) {
+                    // Si las tarifas no han cargado aún, esperamos un poco y reintentamos
+                    setTimeout(() => fetchRecaudacionHoy(), 500);
+                    return;
+                }
+
+                let totalPasajeros = 0;
+                contadorAdultos = 0;
+                contadorEstudiantes = 0;
+
+                data.desglose.forEach(item => {
+                    const monto = parseFloat(item.monto);
+                    const cantidad = parseInt(item.cantidad);
+                    
+                    // Buscar qué tarifa coincide con este monto
+                    // Priorizamos la coincidencia exacta
+                    const tarifaCoincidente = tarifasData.find(t => Math.abs(parseFloat(t.costo) - monto) < 0.01);
+                    
+                    if (tarifaCoincidente) {
+                        const tipo = tarifaCoincidente.tipo_pasajero.toLowerCase();
+                        if (tipo.includes('adulto')) {
+                            contadorAdultos += cantidad;
+                        } else if (tipo.includes('estudiante')) {
+                            contadorEstudiantes += cantidad;
+                        }
+                    } else {
+                        // Si no coincide exacto (raro), lo asignamos a Adulto por defecto o Genérico
+                        // Para este caso, asumiremos adulto si es mayor a X, pero mejor no adivinar demasiado.
+                        // Lo dejamos contado en el total pero quizás no en el desglose específico si falla.
+                    }
+                    totalPasajeros += cantidad;
+                });
+
+                // Actualizar UI de contadores
+                countAdultosSpan.textContent = contadorAdultos;
+                countEstudiantesSpan.textContent = contadorEstudiantes;
+                totalPasajerosSpan.textContent = totalPasajeros;
+
+            } catch (error) {
+                console.error("Error al obtener recaudación histórica:", error);
+            }
+        }
 
     </script>
 

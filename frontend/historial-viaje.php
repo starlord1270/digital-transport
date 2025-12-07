@@ -39,6 +39,29 @@ $user_is_logged_in = (
 $nombre_usuario = $user_is_logged_in ? htmlspecialchars($_SESSION['nombre_completo'] ?? 'Pasajero') : 'Invitado';
 $user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
 
+// 🛑 2025-12-07: ACTUALIZACIÓN DE SALDO EN TIEMPO REAL 🛑
+if ($user_is_logged_in) {
+    require_once '../backend/bd.php'; // Ajusta la ruta si es necesario
+    
+    if (isset($conn)) {
+        $stmt_bal = $conn->prepare("SELECT saldo FROM USUARIO WHERE usuario_id = ?");
+        $stmt_bal->bind_param("i", $_SESSION['usuario_id']);
+        $stmt_bal->execute();
+        $res_bal = $stmt_bal->get_result();
+        
+        if ($res_bal->num_rows > 0) {
+            $row_bal = $res_bal->fetch_assoc();
+            $real_balance = floatval($row_bal['saldo']);
+            
+            // Actualizamos sesión y variable local
+            $_SESSION['saldo'] = $real_balance;
+            $user_balance = $real_balance;
+        }
+        $stmt_bal->close();
+    }
+}
+// 🛑 FIN ACTUALIZACIÓN 🛑
+
 // REDIRECCIÓN: Si el usuario no está logueado, no debería ver su historial.
 if (!$user_is_logged_in) {
     // Guarda la URL actual para redirigir después del login

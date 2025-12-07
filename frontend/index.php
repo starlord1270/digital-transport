@@ -20,6 +20,31 @@ $nombre_usuario = $user_is_logged_in ? htmlspecialchars($_SESSION['nombre_comple
 // Si el saldo no está en la sesión, se usa 0.00.
 $user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00; 
 
+// 🛑 2025-12-07: ACTUALIZACIÓN DE SALDO EN TIEMPO REAL 🛑
+// Si el usuario está logueado, consultamos la BD para tener el saldo fresco (por si hubo cobros)
+if ($user_is_logged_in) {
+    require_once '../backend/bd.php'; // Ajusta la ruta si es necesario
+    
+    if (isset($conn)) {
+        $stmt_bal = $conn->prepare("SELECT saldo FROM USUARIO WHERE usuario_id = ?");
+        $stmt_bal->bind_param("i", $_SESSION['usuario_id']);
+        $stmt_bal->execute();
+        $res_bal = $stmt_bal->get_result();
+        
+        if ($res_bal->num_rows > 0) {
+            $row_bal = $res_bal->fetch_assoc();
+            $real_balance = floatval($row_bal['saldo']);
+            
+            // Actualizamos sesión y variable local
+            $_SESSION['saldo'] = $real_balance;
+            $user_balance = $real_balance;
+        }
+        $stmt_bal->close();
+        // No cerramos $conn aquí porque se puede usar más abajo si index.php crece
+    }
+}
+// 🛑 FIN ACTUALIZACIÓN 🛑 
+
 // 🛑 FIN LÓGICA DE SESIÓN 🛑
 
 // 🚀 LÓGICA PARA MOSTRAR MENSAJE DE ÉXITO POST-LOGIN (REQUIERE QUE login.php LO ESTABLEZCA)

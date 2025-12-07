@@ -21,6 +21,32 @@ $user_is_logged_in = (
 $nombre_usuario = $user_is_logged_in ? htmlspecialchars($_SESSION['nombre_completo'] ?? 'Pasajero') : 'Invitado';
 $user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
 // 🛑 FIN LÓGICA DE SESIÓN 🛑
+    
+    // 🛑 2025-12-07: ACTUALIZACIÓN DE SALDO EN TIEMPO REAL 🛑
+    // Si el usuario está logueado, consultamos la BD para tener el saldo fresco (por si hubo cobros)
+    if ($user_is_logged_in) {
+        // En recarga-digital.php bd.php se requiere mas abajo, pero lo necesitamos aqui.
+        // Lo incluimos si no esta ya incluido (require_once lo maneja)
+        require_once '../backend/bd.php'; 
+        
+        if (isset($conn)) {
+            $stmt_bal = $conn->prepare("SELECT saldo FROM USUARIO WHERE usuario_id = ?");
+            $stmt_bal->bind_param("i", $_SESSION['usuario_id']);
+            $stmt_bal->execute();
+            $res_bal = $stmt_bal->get_result();
+            
+            if ($res_bal->num_rows > 0) {
+                $row_bal = $res_bal->fetch_assoc();
+                $real_balance = floatval($row_bal['saldo']);
+                
+                // Actualizamos sesión y variable local
+                $_SESSION['saldo'] = $real_balance;
+                $user_balance = $real_balance;
+            }
+            $stmt_bal->close();
+        }
+    }
+    // 🛑 FIN ACTUALIZACIÓN 🛑
 
 
 // 2. INCLUIR CONEXIÓN A LA BASE DE DATOS
