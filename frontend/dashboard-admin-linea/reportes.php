@@ -50,14 +50,28 @@ if ($user_type_actual != $user_type_expected || $linea_id_sesion == 0) {
             --color-background-light: #f4f7f9;
             --color-card-bg: #fff;
             --color-border: #e0e0e0;
+            
+            --bg-primary: #ffffff;
+            --bg-secondary: #f4f7f9;
+            --text-primary: #333;
+        }
+
+        [data-theme="dark"] {
+            --color-background-light: #1a1a1a;
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2a2a2a;
+            --text-primary: #e0e0e0;
+            --color-card-bg: #2a2a2a;
+            --color-border: #404040;
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: var(--color-background-light);
-            color: var(--color-text-dark);
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
         }
 
         .admin-container {
@@ -223,7 +237,10 @@ if ($user_type_actual != $user_type_expected || $linea_id_sesion == 0) {
 </head>
 <body>
 
-    <div class="admin-container">
+    <div class="admin-container" style="position: relative;">
+        <button class="theme-toggle" id="theme-toggle" title="Cambiar tema" style="position: absolute; top: 20px; right: 20px; background: none; border: none; font-size: 1.3em; cursor: pointer; padding: 8px; border-radius: 50%; color: var(--text-primary); z-index: 10;">
+            <i class="fas fa-moon"></i>
+        </button>
         <h1>Panel Administrativo - Línea de Transporte</h1>
         
         <div class="tabs">
@@ -384,29 +401,77 @@ if ($user_type_actual != $user_type_expected || $linea_id_sesion == 0) {
                     datasets: [{
                         label: 'Ingreso Diario (Bs)',
                         data: reporte.grafico.map(item => item.ingreso),
-                        borderColor: 'var(--color-primary)',
-                        backgroundColor: 'rgba(11, 46, 136, 0.1)',
-                        tension: 0.2
+                        borderColor: '#0b2e88',  // Azul más oscuro y sólido
+                        backgroundColor: 'rgba(11, 46, 136, 0.25)',  // Fill más visible
+                        borderWidth: 3,  // Línea más gruesa
+                        pointRadius: 5,  // Puntos más grandes
+                        pointBackgroundColor: '#0b2e88',  // Puntos azules sólidos
+                        pointBorderColor: '#fff',  // Borde blanco para contraste
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 7,  // Puntos aún más grandes al hover
+                        tension: 0.3  // Curva suave
                     }]
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: true,
                     scales: {
                         y: {
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Monto (Bs)'
+                                text: 'Monto (Bs)',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                },
+                                color: '#333'
+                            },
+                            ticks: {
+                                color: '#555',
+                                font: {
+                                    size: 12
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)',
+                                lineWidth: 1
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#555',
+                                font: {
+                                    size: 12
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)',
+                                lineWidth: 1
                             }
                         }
                     },
                     plugins: {
                         legend: {
                             position: 'top',
+                            labels: {
+                                color: '#333',
+                                font: {
+                                    size: 13,
+                                    weight: 'bold'
+                                },
+                                padding: 15
+                            }
                         },
                         title: {
                             display: true,
-                            text: `Flujo de Caja ${reporte.tipo} (${reporte.fecha_inicio} a ${reporte.fecha_fin})`
+                            text: `Flujo de Caja ${reporte.tipo} (${reporte.fecha_inicio} a ${reporte.fecha_fin})`,
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            },
+                            color: '#0b2e88',
+                            padding: 20
                         }
                     }
                 }
@@ -491,6 +556,30 @@ if ($user_type_actual != $user_type_expected || $linea_id_sesion == 0) {
 
             document.getElementById('fecha_desde').value = formatDate(lastWeek);
             document.getElementById('fecha_hasta').value = formatDate(today);
+            
+            // TEMA OSCURO
+            const themeToggle = document.getElementById('theme-toggle');
+            const htmlElement = document.documentElement;
+            const themeIcon = themeToggle.querySelector('i');
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            htmlElement.setAttribute('data-theme', savedTheme);
+            updateThemeIcon(savedTheme);
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = htmlElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                htmlElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                updateThemeIcon(newTheme);
+            });
+            function updateThemeIcon(theme) {
+                if (theme === 'dark') {
+                    themeIcon.classList.remove('fa-moon');
+                    themeIcon.classList.add('fa-sun');
+                } else {
+                    themeIcon.classList.remove('fa-sun');
+                    themeIcon.classList.add('fa-moon');
+                }
+            }
             
             // Cargar el reporte inicial
             fetchReporteData('diario', formatDate(lastWeek), formatDate(today));

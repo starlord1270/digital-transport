@@ -1,0 +1,101 @@
+<!-- ====================================================
+     SNIPPET DE TEMA OSCURO - Para copiar a cada vista
+     Incluir en <head> después de Font Awesome
+     ==================================================== -->
+
+<!-- CSS VARIABLES PARA TEMA OSCURO -->
+<style id="dark-mode-vars">
+:root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f4f7f9;
+    --text-primary: #333;
+    --text-secondary: #666;
+    --border-color: #eee;
+    --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] {
+    --color-background-light: #1a1a1a;
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #2a2a2a;
+    --text-primary: #e0e0e0;
+    --text-secondary: #b0b0b0;
+    --border-color: #404040;
+    --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.header {
+    background-color: var(--bg-primary);
+    box-shadow: var(--card-shadow);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.nav-item {
+    color: var(--text-primary);
+}
+
+.nav-item.active {
+    background-color: var(--bg-secondary);
+}
+
+.theme-toggle {
+    background: none;
+    border: none;
+    font-size: 1.3em;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;\n    transition: background-color 0.2s;
+    color: var(--text-primary);
+}
+
+.theme-toggle:hover {
+    background-color: var(--bg-secondary);
+}
+</style>
+
+<!-- ====================================================
+     HTML BUTTON - Agregar en header después de </nav>
+     ==================================================== -->
+<button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+    <i class="fas fa-moon"></i>
+</button>
+
+<!-- ====================================================
+     JAVASCRIPT - Agregar antes de </script> al final
+     ==================================================== -->
+<script>
+// TEMA OSCURO - Toggle y persistencia
+const themeToggle = document.getElementById('theme-toggle');
+const htmlElement = document.documentElement;
+const themeIcon = themeToggle.querySelector('i');
+
+// Cargar tema guardado
+const savedTheme = localStorage.getItem('theme') || 'light';
+htmlElement.setAttribute('data-theme', savedTheme);
+updateThemeIcon(savedTheme);
+
+// Toggle
+themeToggle.addEventListener('click', () => {
+    const currentTheme = htmlElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    htmlElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    updateThemeIcon(newTheme);
+});
+
+function updateThemeIcon(theme) {
+    if (theme === 'dark') {
+        themeIcon.classList.remove('fa-moon');
+        themeIcon.classList.add('fa-sun');
+    } else {
+        themeIcon.classList.remove('fa-sun');
+        themeIcon.classList.add('fa-moon');
+    }
+}
+</script>

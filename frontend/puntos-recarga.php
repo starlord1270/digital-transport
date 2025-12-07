@@ -30,18 +30,37 @@ $user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
             --color-secondary: #1e88e5;
             --color-text-dark: #333;
             --color-background-light: #f4f7f9;
+            
+            --bg-primary: #ffffff;
+            --bg-secondary: #f4f7f9;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --border-color: #eee;
+            --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
             --color-rating-star: #ffc107;
             --color-distance: #0b2e88;
+        }
+
+        [data-theme="dark"] {
+            --color-background-light: #1a1a1a;
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2a2a2a;
+            --text-primary: #e0e0e0;
+            --text-secondary: #b0b0b0;
+            --border-color: #404040;
+            --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: var(--color-background-light);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            transition: background-color 0.3s, color 0.3s;
         }
         
         /* --- Header / Menú Superior (Común) --- */
@@ -50,15 +69,30 @@ $user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
             justify-content: space-between;
             align-items: center;
             padding: 15px 5%;
-            background-color: white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            background-color: var(--bg-primary);
+            box-shadow: var(--card-shadow);
+            border-bottom: 1px solid var(--border-color);
             width: 100%;
             box-sizing: border-box;
         }
         .logo { font-size: 1.2em; font-weight: bold; color: var(--color-primary); }
         .nav-menu { display: flex; gap: 20px; }
-        .nav-item { color: #666; text-decoration: none; padding: 5px 10px; border-radius: 5px; font-size: 0.95em; transition: background-color 0.2s, color 0.2s; }
-        .nav-item.active { background-color: #f0f0f0; color: var(--color-text-dark); font-weight: 500; }
+        .nav-item { color: var(--text-primary); text-decoration: none; padding: 5px 10px; border-radius: 5px; font-size: 0.95em; transition: background-color 0.2s; }
+        .nav-item.active { background-color: var(--bg-secondary); font-weight: 500; }
+        
+        .theme-toggle {
+            background: none;
+            border: none;
+            font-size: 1.3em;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+            color: var(--text-primary);
+        }
+        .theme-toggle:hover {
+            background-color: var(--bg-secondary);
+        }
         .saldo { font-size: 1em; color: var(--color-text-dark); font-weight: 600; }
 
         /* --- Contenido Principal de la Vista --- */
@@ -220,9 +254,8 @@ $user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
                 <a href="index.php" class="nav-item">Inicio</a>
                 <a href="recarga-digital.php" class="nav-item">Recarga</a>
                 <a href="puntos-recarga.php" class="nav-item active">Puntos PR</a>
-                <a href="mis-boletos.php" class="nav-item">Boletos</a>
                 <a href="historial-viaje.php" class="nav-item">Historial</a> 
-                <a href="perfil-usuario.php" class="nav-item">
+                <a href="perfil-pasajero.php" class="nav-item">
                     <i class="fas fa-user-circle"></i> Perfil
                 </a>
                 <a href="../backend/logout.php?redirect=puntos-recarga.php" class="nav-item">
@@ -236,10 +269,14 @@ $user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
             <?php endif; ?>
         </nav>
         
+        <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+            <i class="fas fa-moon"></i>
+        </button>
+        
         <div class="saldo">
             <?php if ($user_is_logged_in): ?>
                 <span style="margin-right: 15px; font-weight: 500;">¡Hola, <?php echo $nombre_usuario; ?>!</span>
-                Saldo: **Bs. <?php echo number_format($user_balance, 2); ?>**
+                Saldo: Bs. <?php echo number_format($user_balance, 2); ?>
             <?php else: ?>
                 <span style="font-weight: 500;">Invitado</span>
             <?php endif; ?>
@@ -437,22 +474,6 @@ $user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
             { name: "AV. Hernan Siles" }
         ];
 
-        // Ubicación de origen simulada (Placeholder literal para la URL)
-        const defaultOrigin = '-17.3934,-66.1569'; 
-
-        // 🚨 Mapeo de Coordenadas de Destino a los IDs de URL específicos.
-        // Asegura que cada coordenada (destino) active el ID de URL correcto.
-        const URL_MAPPING = {
-            // Coordenada: ID
-            "-17.3550,-66.1650": "6",   // AV. Hernan Siles
-            "-17.4060,-66.1580": "7",   // AV. Ayacucho
-            "-17.3871,-66.1491": "8",   // Facultad de Medicina UMSS
-            "-17.3941,-66.1565": "9",   // Plaza Principal
-            "-17.3892,-66.1557": "10",  // Plaza Colon
-            "-17.3670,-66.1420": "12",  // Calle las Cucardas
-        };
-
-
         /**
          * Inicializa la funcionalidad del botón "Cómo llegar" con redirección a Google Maps.
          */
@@ -464,14 +485,10 @@ $user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
                 button.onclick = () => {
                     const lat = button.getAttribute('data-lat');
                     const lng = button.getAttribute('data-lng');
-                    const destination = `${lat},${lng}`;
-                    const mapKey = destination;
                     
-                    // Obtiene el ID de URL específico basado en la coordenada, usando "0" como fallback.
-                    const urlId = URL_MAPPING[mapKey] || "0"; 
-
-                    // Estructura de URL correcta: ID{defaultOrigin}/destination
-                    const mapUrl = `http://googleusercontent.com/maps.google.com/${urlId}{defaultOrigin}/${destination}`;
+                    // URL correcta de Google Maps Directions API
+                    // Formato: https://www.google.com/maps/dir/?api=1&destination=lat,lng
+                    const mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
                     
                     window.open(mapUrl, '_blank');
                 };
@@ -485,6 +502,29 @@ $user_balance = $user_is_logged_in ? ($_SESSION['saldo'] ?? 0.00) : 0.00;
         // Ejecutar la inicialización de los botones al cargar el script
         initButtons();
 
+        // TEMA OSCURO
+        const themeToggle = document.getElementById('theme-toggle');
+        const htmlElement = document.documentElement;
+        const themeIcon = themeToggle.querySelector('i');
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        htmlElement.setAttribute('data-theme', savedTheme);
+        updateThemeIcon(savedTheme);
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = htmlElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            htmlElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+        });
+        function updateThemeIcon(theme) {
+            if (theme === 'dark') {
+                themeIcon.classList.remove('fa-moon');
+                themeIcon.classList.add('fa-sun');
+            } else {
+                themeIcon.classList.remove('fa-sun');
+                themeIcon.classList.add('fa-moon');
+            }
+        }
     </script>
 
 </body>

@@ -1,79 +1,5 @@
 <?php
-/**
- * Archivo: registro_usuario.php
- * Descripción: Script unificado que maneja la vista de registro (HTML/CSS) y 
- * la lógica de inserción de datos a la BD.
- */
-
-// 1. INCLUIR CONEXIÓN A LA BASE DE DATOS
-// Asegúrate de que 'db_connection.php' esté en el mismo directorio
-require_once '../backend/bd.php'; // Sube un nivel (..) y entra en la carpeta backend/
-
-// Definición de Tipos de Usuario (Asumiendo que ya existen en la tabla TIPO_USUARIO)
-$TIPO_USUARIO_ESTANDAR = 1;
-$TIPO_USUARIO_ESTUDIANTE = 2;
-$message = ''; // Variable para almacenar mensajes de éxito o error
-
-// ----------------------------------------------------
-// 2. LÓGICA DE PROCESAMIENTO DEL FORMULARIO (PHP)
-// ----------------------------------------------------
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    
-    // Recolección y saneamiento de datos
-    $full_name = trim($_POST['full_name'] ?? '');
-    $doc_id = trim($_POST['doc_id'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $phone = trim($_POST['phone'] ?? '');
-    $password_raw = $_POST['password'] ?? '';
-    $password_confirm = $_POST['password-confirm'] ?? '';
-    // Recupera el valor del campo oculto o usa 'standard' por defecto
-    $account_type = trim($_POST['account_type'] ?? 'standard'); 
-    
-    // 2.1. Validación de campos requeridos y contraseñas
-    if (empty($full_name) || empty($doc_id) || empty($email) || empty($phone) || empty($password_raw) || empty($password_confirm)) {
-        $message = '<div class="alert error">Error: Faltan campos obligatorios.</div>';
-    } elseif ($password_raw !== $password_confirm) {
-        $message = '<div class="alert error">Error: Las contraseñas no coinciden.</div>';
-    } else {
-        // Determinar el ID de tipo de usuario
-        $tipo_usuario_id = ($account_type === 'student') ? $TIPO_USUARIO_ESTUDIANTE : $TIPO_USUARIO_ESTANDAR;
-        $password_hash = password_hash($password_raw, PASSWORD_DEFAULT);
-        
-        // 2.2. Verificación de duplicados (Email o Documento)
-        $stmt = $conn->prepare("SELECT usuario_id FROM USUARIO WHERE email = ? OR documento_identidad = ?");
-        $stmt->bind_param("ss", $email, $doc_id);
-        $stmt->execute();
-        $stmt->store_result();
-        
-        if ($stmt->num_rows > 0) {
-            $message = '<div class="alert error">Error: El correo electrónico o el Documento de Identidad ya están registrados.</div>';
-            $stmt->close();
-        } else {
-            $stmt->close();
-
-            // 2.3. Inserción en la tabla USUARIO
-            $sql = "INSERT INTO USUARIO (tipo_usuario_id, documento_identidad, nombre_completo, email, password_hash, fecha_registro)
-                    VALUES (?, ?, ?, ?, ?, NOW())";
-
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("issss", $tipo_usuario_id, $doc_id, $full_name, $email, $password_hash);
-
-            if ($stmt->execute()) {
-                $new_user_id = $stmt->insert_id;
-                // NOTA: Se recomienda redirigir después de un registro exitoso.
-                $message = '<div class="alert success">¡Registro Exitoso! Tu cuenta ha sido creada. ID de Usuario: ' . $new_user_id . '. Serás redirigido a Iniciar Sesión en 5 segundos.</div>';
-                
-                // Redirección exitosa (Descomentar para producción)
-                header("refresh:5; url=inicio-sesion-usuarios.php"); 
-            } else {
-                $message = '<div class="alert error">Error al registrar usuario: ' . $conn->error . '</div>';
-            }
-            $stmt->close();
-        }
-    }
-}
-// La conexión se cerrará al final del script automáticamente, o con $conn->close() si se desea cerrar antes.
+// Frontend de Registro - La lógica ahora es manejada vía AJAX por validacion-registro.php
 ?>
 
 <!DOCTYPE html>
@@ -345,13 +271,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <p>Crea tu cuenta para comenzar a usar Digital Transport</p>
             </header>
 
-            <?php echo $message; ?>
+            <div id="js-message" style="display:none; margin-bottom: 20px;"></div>
             
             <section class="form-section" style="padding: 0; border: none; background: none;">
                 <h2>Tipo de Cuenta</h2>
                 <p style="font-size: 0.95em; color: var(--color-text-dark); margin-bottom: 20px;">Selecciona el tipo de usuario que deseas registrar</p>
 
-                <form method="POST"> 
+                <form id="registerForm"> 
                     <input type="hidden" id="account_type" name="account_type" value="standard">
 
                     <div class="account-type-selection">
@@ -433,6 +359,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </footer>
 
     <script>
+        // CONFIGURACIÓN DE TIPOS DE USUARIO PARA EL BACKEND
+        const TIPO_ESTANDAR = 1; 
+        const TIPO_ESTUDIANTE = 2; // Ajustar según tu tabla TIPO_USUARIO
+
         // JS para manejar la selección del tipo de cuenta y actualizar el campo oculto
         document.querySelectorAll('.account-card').forEach(card => {
             card.addEventListener('click', function() {
@@ -447,20 +377,66 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             });
         });
         
-        // Mantener la selección después de un error si es posible (simple)
-        document.addEventListener('DOMContentLoaded', () => {
-             const hiddenInput = document.getElementById('account_type');
-             // Si el hiddenInput existe (debería), intentar restaurar la selección de la tarjeta
-             if (hiddenInput && hiddenInput.value !== 'standard') {
-                 document.querySelectorAll('.account-card').forEach(card => {
-                     if (card.getAttribute('data-type') === hiddenInput.value) {
-                         card.classList.add('selected');
-                     } else {
-                         card.classList.remove('selected');
-                     }
-                 });
-             }
-         });
+        // Manejo del Formulario con AJAX
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const messageDiv = document.getElementById('js-message');
+            messageDiv.style.display = 'none';
+            messageDiv.innerHTML = '';
+            
+            // Recoger datos
+            const formData = new FormData();
+            
+            // Mapeo de campos del formulario (HTML) a lo que espera validacion-registro.php
+            formData.append('nombre_completo', document.getElementById('full-name').value);
+            formData.append('documento_identidad', document.getElementById('doc-id').value);
+            formData.append('email', document.getElementById('email').value);
+            // El backend no usa 'phone' en USUARIO, pero si lo necesitas, debes añadirlo a la BD y al backend.
+            // Por ahora lo ignoramos o lo enviamos si el backend lo soportara.
+            
+            const pass = document.getElementById('password').value;
+            const passConfirm = document.getElementById('password-confirm').value;
+            
+            if (pass !== passConfirm) {
+                showMessage('Error: Las contraseñas no coinciden.', 'error');
+                return;
+            }
+            formData.append('password', pass);
+            
+            const accountType = document.getElementById('account_type').value;
+            const tipoId = (accountType === 'student') ? TIPO_ESTUDIANTE : TIPO_ESTANDAR;
+            formData.append('tipo_usuario_id', tipoId);
+            
+            // Enviar petición
+            fetch('../backend/validacion-registro.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                    setTimeout(() => {
+                        window.location.href = 'inicio-sesion-usuarios.php';
+                    }, 3000);
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showMessage('Error de conexión con el servidor.', 'error');
+            });
+        });
+
+        function showMessage(msg, type) {
+            const el = document.getElementById('js-message');
+            el.className = 'alert ' + type;
+            el.textContent = msg; // Text content para seguridad
+            el.style.display = 'block';
+            el.scrollIntoView({ behavior: 'smooth' });
+        }
     </script>
 
 </body>

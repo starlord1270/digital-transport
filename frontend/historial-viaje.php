@@ -55,6 +55,10 @@ if (!$user_is_logged_in) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Digital Transport - Historial de Viajes</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <!-- Librerías para exportar PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         /* Estilos CSS (Se mantienen incrustados por simplicidad) */
         :root {
@@ -65,16 +69,35 @@ if (!$user_is_logged_in) {
             --color-success: #4caf50;
             --color-border: #eee;
             --color-completed: #1e88e5;
+            
+            --bg-primary: #ffffff;
+            --bg-secondary: #f4f7f9;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --border-color: #eee;
+            --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        [data-theme="dark"] {
+            --color-background-light: #1a1a1a;
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2a2a2a;
+            --text-primary: #e0e0e0;
+            --text-secondary: #b0b0b0;
+            --border-color: #404040;
+            --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: var(--color-background-light);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            transition: background-color 0.3s, color 0.3s;
         }
         
         /* --- Header / Menú Superior (Común) --- */
@@ -83,15 +106,30 @@ if (!$user_is_logged_in) {
             justify-content: space-between;
             align-items: center;
             padding: 15px 5%;
-            background-color: white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            background-color: var(--bg-primary);
+            box-shadow: var(--card-shadow);
+            border-bottom: 1px solid var(--border-color);
             width: 100%;
             box-sizing: border-box;
         }
         .logo { font-size: 1.2em; font-weight: bold; color: var(--color-primary); }
         .nav-menu { display: flex; gap: 20px; }
-        .nav-item { color: #666; text-decoration: none; padding: 5px 10px; border-radius: 5px; font-size: 0.95em; transition: background-color 0.2s, color 0.2s; }
-        .nav-item.active { background-color: #f0f0f0; color: var(--color-text-dark); font-weight: 500; }
+        .nav-item { color: var(--text-primary); text-decoration: none; padding: 5px 10px; border-radius: 5px; font-size: 0.95em; transition: background-color 0.2s; }
+        .nav-item.active { background-color: var(--bg-secondary); font-weight: 500; }
+        
+        .theme-toggle {
+            background: none;
+            border: none;
+            font-size: 1.3em;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+            color: var(--text-primary);
+        }
+        .theme-toggle:hover {
+            background-color: var(--bg-secondary);
+        }
         .saldo { font-size: 1em; color: var(--color-text-dark); font-weight: 600; }
 
         /* --- Contenido Principal de la Vista --- */
@@ -263,9 +301,8 @@ if (!$user_is_logged_in) {
             <a href="index.php" class="nav-item">Inicio</a>
             <a href="recarga-digital.php" class="nav-item">Recarga</a>
             <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
-            <a href="mis-boletos.php" class="nav-item">Boletos</a>
             <a href="historial-viaje.php" class="nav-item active">Historial</a> 
-            <a href="perfil-usuario.php" class="nav-item">
+            <a href="perfil-pasajero.php" class="nav-item">
                 <i class="fas fa-user-circle"></i> Perfil
             </a>
             <a href="../backend/logout.php?redirect=historial-viaje.php" class="nav-item">
@@ -273,9 +310,13 @@ if (!$user_is_logged_in) {
             </a>
         </nav>
         
+        <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+            <i class="fas fa-moon"></i>
+        </button>
+        
         <div class="saldo">
             <span style="margin-right: 15px; font-weight: 500;">¡Hola, <?php echo $nombre_usuario; ?>!</span>
-            Saldo: **Bs. <?php echo number_format($user_balance, 2); ?>**
+            Saldo: Bs. <?php echo number_format($user_balance, 2); ?>
         </div>
     </header>
 
@@ -287,8 +328,8 @@ if (!$user_is_logged_in) {
                     <h1>Historial de Viajes</h1>
                     <p>Últimos 30 días</p>
                 </div>
-                <button class="btn-export">
-                    <i class="fas fa-file-export"></i> Exportar
+                <button class="btn-export" onclick="exportHistoryToPDF()">
+                    <i class="fas fa-file-pdf"></i> Exportar a PDF
                 </button>
             </div>
 
@@ -455,9 +496,85 @@ if (!$user_is_logged_in) {
             }
         }
 
+        // ----------------------------------------------------
+        // IV. FUNCIÓN DE EXPORTACIÓN A PDF
+        // ----------------------------------------------------
+        
+        function exportHistoryToPDF() {
+            const { jsPDF } = window.jspdf;
+            const contentToExport = document.querySelector('.main-content');
+            const exportButton = document.querySelector('.btn-export');
+            
+            // Ocultar temporalmente el botón de exportar
+            exportButton.style.display = 'none';
+            
+            // Capturar el contenido como imagen
+            html2canvas(contentToExport, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 210; // A4 width in mm
+                const pageHeight = 295; // A4 height in mm
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                // Múltiples páginas si es necesario
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+
+                // Generar nombre del archivo
+                const today = new Date().toISOString().split('T')[0];
+                const filename = `Historial_Viajes_<?php echo str_replace(' ', '_', $nombre_usuario); ?>_${today}.pdf`;
+                
+                pdf.save(filename);
+                
+                // Volver a mostrar el botón
+                exportButton.style.display = 'flex';
+            }).catch(err => {
+                alert('Error al exportar el PDF. Intente nuevamente.');
+                console.error('PDF Export Error:', err);
+                exportButton.style.display = 'flex';
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             fetchAndRenderHistory();
         });
+        
+        // TEMA OSCURO
+        const themeToggle = document.getElementById('theme-toggle');
+        const htmlElement = document.documentElement;
+        const themeIcon = themeToggle.querySelector('i');
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        htmlElement.setAttribute('data-theme', savedTheme);
+        updateThemeIcon(savedTheme);
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = htmlElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            htmlElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+        });
+        function updateThemeIcon(theme) {
+            if (theme === 'dark') {
+                themeIcon.classList.remove('fa-moon');
+                themeIcon.classList.add('fa-sun');
+            } else {
+                themeIcon.classList.remove('fa-sun');
+                themeIcon.classList.add('fa-moon');
+            }
+        }
         
     </script>
 

@@ -6,11 +6,12 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // 🛑 LÓGICA DE VERIFICACIÓN DE SESIÓN PARA PASAJERO (tipo_usuario_id = 1) 🛑
 
-// Verificar si el usuario ha iniciado sesión Y si es un PASAJERO (tipo_usuario_id = 1)
-// NOTA: Asumo que 1 es el ID para Pasajero/Usuario.
+// Verificar si el usuario ha iniciado sesión Y si es un PASAJERO válido
+// Roles: 1 (Estándar), 2 (Estudiante), 5 (Adulto), 6 (Adulto Mayor)
+$allowed_roles = [1, 2, 5, 6];
 $user_is_logged_in = (
     isset($_SESSION['usuario_id']) && 
-    ($_SESSION['tipo_usuario_id'] == 1) // 1 es para Pasajero/Usuario
+    in_array($_SESSION['tipo_usuario_id'], $allowed_roles)
 );
 
 $nombre_usuario = $user_is_logged_in ? htmlspecialchars($_SESSION['nombre_completo'] ?? 'Pasajero') : 'Invitado';
@@ -39,24 +40,44 @@ if (isset($_SESSION['login_success_message'])) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
-            --color-primary: #0b2e88; /* Azul oscuro principal */
-            --color-secondary: #1e88e5; /* Azul para botones/énfasis */
+            --color-primary: #0b2e88;
+            --color-secondary: #1e88e5;
             --color-text-dark: #333;
             --color-background-light: #f4f7f9;
-            --color-student-green: #4caf50; /* Verde de la tarifa Estudiante */
+            --color-student-green: #4caf50;
             --color-feature-icon-1: #1e88e5; 
             --color-feature-icon-2: #4caf50; 
-            --color-feature-icon-3: #9c27b0; 
+            --color-feature-icon-3: #9c27b0;
+            
+            /* Tema claro (default) */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f4f7f9;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --border-color: #eee;
+            --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        [data-theme="dark"] {
+            --color-background-light: #1a1a1a;
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2a2a2a;
+            --text-primary: #e0e0e0;
+            --text-secondary: #b0b0b0;
+            --border-color: #404040;
+            --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: white; /* Fondo blanco en la mayor parte de la vista */
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            transition: background-color 0.3s, color 0.3s;
         }
         
         /* Ajuste de color de fondo general para secciones */
@@ -72,8 +93,9 @@ if (isset($_SESSION['login_success_message'])) {
             justify-content: space-between;
             align-items: center;
             padding: 15px 5%;
-            background-color: white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            background-color: var(--bg-primary);
+            box-shadow: var(--card-shadow);
+            border-bottom: 1px solid var(--border-color);
             width: 100%;
             box-sizing: border-box;
         }
@@ -81,8 +103,23 @@ if (isset($_SESSION['login_success_message'])) {
         .logo { font-size: 1.2em; font-weight: bold; color: var(--color-primary); }
         /* Permite que el menú se envuelva en móviles */
         .nav-menu { display: flex; gap: 20px; flex-wrap: wrap; justify-content: flex-end; } 
-        .nav-item { color: var(--color-text-dark); text-decoration: none; padding: 5px 10px; border-radius: 5px; font-size: 0.95em; transition: background-color 0.2s; }
-        .nav-item.active { background-color: #f0f0f0; font-weight: 500; }
+        .nav-item { color: var(--text-primary); text-decoration: none; padding: 5px 10px; border-radius: 5px; font-size: 0.95em; transition: background-color 0.2s; }
+        .nav-item.active { background-color: var(--bg-secondary); font-weight: 500; }
+        
+        /* Theme Toggle Button */
+        .theme-toggle {
+            background: none;
+            border: none;
+            font-size: 1.3em;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+            color: var(--text-primary);
+        }
+        .theme-toggle:hover {
+            background-color: var(--bg-secondary);
+        }
         
         /* Estilos del Saldo y Nombre */
         .saldo { 
@@ -246,6 +283,116 @@ if (isset($_SESSION['login_success_message'])) {
             border-top: 1px solid #eee;
         }
 
+        /* === MODAL DE PASE DIGITAL === */
+        .qr-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .qr-modal-overlay.active {
+            display: flex;
+        }
+
+        .qr-modal-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+            color: white;
+            position: relative;
+            animation: slideUp 0.4s ease;
+        }
+
+        .qr-modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 24px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .qr-modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .qr-modal-header {
+            margin-bottom: 25px;
+        }
+
+        .qr-modal-header h2 {
+            font-size: 1.8em;
+            margin: 0 0 10px 0;
+            font-weight: 600;
+        }
+
+        .qr-modal-header p {
+            opacity: 0.9;
+            font-size: 0.95em;
+            margin: 0;
+        }
+
+        .qr-code-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 20px 0;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        #qr-code {
+            margin: 0 auto;
+        }
+
+        .user-info-qr {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .user-info-qr p {
+            margin: 8px 0;
+            font-size: 0.95em;
+        }
+
+        .user-info-qr strong {
+            font-weight: 600;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         /* Media Query para responsividad básica */
         @media (max-width: 900px) {
             .header { flex-wrap: wrap; justify-content: space-between; gap: 10px; }
@@ -280,7 +427,6 @@ if (isset($_SESSION['login_success_message'])) {
                 <a href="index.php" class="nav-item active">Inicio</a>
                 <a href="recarga-digital.php" class="nav-item">Recarga</a>
                 <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
-                <a href="mis-boletos.php" class="nav-item">Boletos</a>
                 <a href="historial-viaje.php" class="nav-item">Historial</a>
                 <a href="perfil-pasajero.php" class="nav-item">
                     <i class="fas fa-user-circle"></i> Perfil
@@ -294,6 +440,11 @@ if (isset($_SESSION['login_success_message'])) {
                 <a href="registro-usuarios.php" class="nav-item">Regístrate</a>
             <?php endif; ?>
         </nav>
+        
+        <!-- Theme Toggle -->
+        <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+            <i class="fas fa-moon"></i>
+        </button>
         
         <?php if ($user_is_logged_in): ?>
         <div class="saldo">
@@ -317,8 +468,15 @@ if (isset($_SESSION['login_success_message'])) {
                 <h1>Bienvenido a Digital Transport</h1>
                 <p>La forma más fácil y rápida de pagar tu transporte público. Recarga tu tarjeta, compra boletos y viaja sin efectivo.</p>
                 <div class="buttons">
-                    <a href="recarga-digital.php" class="btn btn-primary">Recargar Ahora</a>
-                    <a href="registro-usuarios.php" class="btn btn-secondary">Registrarse</a>
+                    <?php if ($user_is_logged_in): ?>
+                        <button class="btn btn-primary" id="btn-show-qr" style="font-size: 1.1em; padding: 15px 35px;">
+                            <i class="fas fa-qrcode"></i> Mostrar mi Pase Digital
+                        </button>
+                        <a href="recarga-digital.php" class="btn btn-secondary">Recargar Saldo</a>
+                    <?php else: ?>
+                        <a href="recarga-digital.php" class="btn btn-primary">Recargar Ahora</a>
+                        <a href="registro-usuarios.php" class="btn btn-secondary">Registrarse</a>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -423,13 +581,129 @@ if (isset($_SESSION['login_success_message'])) {
         </section>
 
     </div> 
+    
+    <!-- MODAL DE PASE DIGITAL -->
+    <?php if ($user_is_logged_in): ?>
+    <div class="qr-modal-overlay" id="qr-modal">
+        <div class="qr-modal-content">
+            <button class="qr-modal-close" id="btn-close-qr">
+                <i class="fas fa-times"></i>
+            </button>
+            
+            <div class="qr-modal-header">
+                <h2><i class="fas fa-ticket-alt"></i> Tu Pase Digital</h2>
+                <p>Muestra este código al conductor</p>
+            </div>
+            
+            <div class="qr-code-container">
+                <div id="qr-code"></div>
+            </div>
+            
+            <div class="user-info-qr">
+                <p><strong><?php echo $nombre_usuario; ?></strong></p>
+                <p>Saldo: <strong>Bs. <?php echo number_format($user_balance, 2); ?></strong></p>
+                <p style="font-size: 0.85em; opacity: 0.8;">Usuario #<?php echo $_SESSION['usuario_id']; ?></p>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    
     <footer class="footer">
         © 2025 Digital Transport - Sistema de Boletos Digital
     </footer>
 
+    <!-- QR Code Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
     <script>
-        // JavaScript opcional aquí si se requiere alguna interactividad
+        <?php if ($user_is_logged_in): ?>
+        // === CONTROL DEL MODAL DE QR ===
+        const btnShowQr = document.getElementById('btn-show-qr');
+        const btnCloseQr = document.getElementById('btn-close-qr');
+        const qrModal = document.getElementById('qr-modal');
+        const qrCodeContainer = document.getElementById('qr-code');
+        
+        let qrGenerated = false;
+        
+        // Datos del usuario para el QR
+        const userData = {
+            usuario_id: <?php echo $_SESSION['usuario_id']; ?>,
+            nombre: "<?php echo $nombre_usuario; ?>",
+            tipo_usuario: <?php echo $_SESSION['tipo_usuario_id']; ?>,
+            saldo: <?php echo $user_balance; ?>
+        };
+        
+        // Generar código único para el QR
+        const qrData = `DT-USER-${userData.usuario_id}-${Date.now()}`;
+        
+        // Mostrar modal
+        if (btnShowQr) {
+            btnShowQr.addEventListener('click', function() {
+                qrModal.classList.add('active');
+                
+                // Generar QR solo la primera vez
+                if (!qrGenerated) {
+                    new QRCode(qrCodeContainer, {
+                        text: qrData,
+                        width: 200,
+                        height: 200,
+                        colorDark: "#0b2e88",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                    qrGenerated = true;
+                }
+            });
+        }
+        
+        // Cerrar modal
+        if (btnCloseQr) {
+            btnCloseQr.addEventListener('click', function() {
+                qrModal.classList.remove('active');
+            });
+        }
+        
+        // Cerrar al hacer clic fuera del modal
+        qrModal.addEventListener('click', function(e) {
+            if (e.target === qrModal) {
+                qrModal.classList.remove('active');
+            }
+        });
+        <?php endif; ?>
+        
+        // =====================================================
+        // TEMA OSCURO - Toggle y persistencia
+        // =====================================================
+        const themeToggle = document.getElementById('theme-toggle');
+        const htmlElement = document.documentElement;
+        const themeIcon = themeToggle.querySelector('i');
+        
+        // Cargar tema guardado o default
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        htmlElement.setAttribute('data-theme', savedTheme);
+        updateThemeIcon(savedTheme);
+        
+        // Toggle al hacer click
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = htmlElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            htmlElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+        });
+        
+        function updateThemeIcon(theme) {
+            if (theme === 'dark') {
+                themeIcon.classList.remove('fa-moon');
+                themeIcon.classList.add('fa-sun');
+            } else {
+                themeIcon.classList.remove('fa-sun');
+                themeIcon.classList.add('fa-moon');
+            }
+        }
     </script>
 
 </body>
 </html>
+```

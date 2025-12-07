@@ -38,23 +38,29 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
-    // --- 4. CONSULTA SQL CORREGIDA ---
-    // CORRECCIÓN: Usamos T.tipo = 'COBRO' ya que T.tipo_movimiento = 'Uso' no existe.
-    // NOTA: Para obtener la Línea real, necesitarías JOINs adicionales con CHOFER y LINEA.
+    // --- 4. CONSULTA SQL ACTUALIZADA ---
+    // Ahora soporta transacciones con tarjeta_id (antiguo) Y usuario_id (nuevo con QR)
+    // JOIN con CHOFER y LINEA para obtener el nombre real de la línea
     $sql = "
         SELECT
             T.transaccion_id,
             T.monto,
             T.fecha_hora,
             T.tarjeta_id,
-            'Línea de Servicio' AS nombre_linea, 
+            T.usuario_id AS transaccion_usuario_id,
+            T.chofer_id_cobro,
+            COALESCE(L.nombre, 'Línea Desconocida') AS nombre_linea,
             'Cobro por Viaje' AS ruta_detalle
         FROM 
             TRANSACCION T
-        JOIN 
+        LEFT JOIN 
             TARJETA TA ON T.tarjeta_id = TA.tarjeta_id
+        LEFT JOIN
+            CHOFER C ON T.chofer_id_cobro = C.chofer_id
+        LEFT JOIN
+            LINEA L ON C.linea_id = L.linea_id
         WHERE 
-            TA.usuario_id = :user_id 
+            (TA.usuario_id = :user_id OR T.usuario_id = :user_id)
             AND T.tipo = 'COBRO' 
             AND T.fecha_hora >= :date_limit
         ORDER BY 
@@ -78,13 +84,21 @@ try {
         // Usar DateTime::createFromFormat si el formato de BD no es estándar, 
         // pero asumiremos que fecha_hora es estándar DATETIME.
         $date_time = new DateTime($item['fecha_hora']);
+        
+        // Determinar el tipo de transacción
+        $detalles = $item['ruta_detalle'];
+        if (!empty($item['transaccion_usuario_id'])) {
+            $detalles .= ' (Pago con QR)';
+        } elseif (!empty($item['tarjeta_id'])) {
+            $detalles .= ' (Tarjeta ID: ' . $item['tarjeta_id'] . ')';
+        }
 
         $formatted_history[] = [
             'id' => $item['transaccion_id'],
             'date' => $date_time->format('Y-m-d'), 
             'time' => $date_time->format('H:i A'),
             'line' => $item['nombre_linea'],
-            'details' => $item['ruta_detalle'] . ' (Tarjeta ID: ' . $item['tarjeta_id'] . ')',
+            'details' => $detalles,
             'amount' => $monto,
             'status' => 'Completado'
         ];

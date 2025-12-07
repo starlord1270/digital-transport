@@ -36,8 +36,8 @@ $is_success = false;
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
-    // Recolección y saneamiento de datos
-    $card_id = trim($_POST['card_id'] ?? ''); 
+    // Recolección y saneamiento de datos comunes
+    $recharge_mode = trim($_POST['recharge_mode'] ?? 'account'); // 'account' o 'card'
     $amount = filter_input(INPUT_POST, 'amount', FILTER_VALIDATE_FLOAT);
     $payment_method = trim($_POST['payment_method'] ?? '');
 
@@ -45,92 +45,165 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $dni = trim($_POST['dni'] ?? '');
     $email = trim($_POST['email'] ?? '');
     
-    // 3.1. Validación básica de campos
-    if (empty($card_id) || $amount === false || $amount <= 0) {
-        $status_message = 'Por favor, ingresa un ID de tarjeta válido y un monto de recarga positivo.';
+    // 3.1. Validación básica de monto
+    if ($amount === false || $amount <= 0) {
+        $status_message = 'Por favor, ingresa un monto de recarga válido.';
     } else {
         
-        // --- Paso 1: Verificar la Tarjeta ---
-        $sql_check = "SELECT tarjeta_id, saldo_actual FROM TARJETA WHERE codigo_nfc = ?";
-        $stmt_check = $conn->prepare($sql_check);
-        $stmt_check->bind_param("s", $card_id);
-        $stmt_check->execute();
-        $result_check = $stmt_check->get_result();
+        // Detalles de pago para la base de datos
+        $detalles_pago = "Recarga Digital Vía Web - Método: " . strtoupper($payment_method);
+        
+        // Validaciones Adicionales según el método de pago
+        $valid_additional_fields = true;
+        if ($payment_method === 'tarjeta') {
+             if (empty($dni) || empty($email)) {
+                 $status_message = 'Error: Debes completar tu C.I. y Correo para la factura.';
+                 $valid_additional_fields = false;
+             } else {
+                 $detalles_pago .= " - Factura a C.I.: {$dni}, Correo: {$email}";
+             }
+        }
+        if ($payment_method === 'pago_movil') {
+            $detalles_pago .= " - Pendiente de Confirmación QR";
+        }
+        
+        if (!$valid_additional_fields) {
+            goto end_post_processing; 
+        }
 
-        if ($result_check->num_rows === 0) {
-            $status_message = 'Error: El ID de tarjeta ingresado no existe en el sistema.';
-        } else {
-            // Tarjeta encontrada
-            $tarjeta_data = $result_check->fetch_assoc();
-            $tarjeta_id = $tarjeta_data['tarjeta_id'];
-            $saldo_anterior = $tarjeta_data['saldo_actual'];
+        // --- LÓGICA DUAL: MODO CUENTA vs MODO TARJETA ---
+        
+        if ($recharge_mode === 'account') {
+            // ========== MODO CUENTA ==========
+            
+            if (!$user_is_logged_in) {
+                $status_message = 'Error: Debes iniciar sesión para recargar tu cuenta.';
+                goto end_post_processing;
+            }
+            
+            $usuario_id = $_SESSION['usuario_id'];
+            
+            // Paso 1: Obtener saldo actual del usuario
+            $sql_get_saldo = "SELECT saldo FROM USUARIO WHERE usuario_id = ?";
+            $stmt_get = $conn->prepare($sql_get_saldo);
+            $stmt_get->bind_param("i", $usuario_id);
+            $stmt_get->execute();
+            $result_saldo = $stmt_get->get_result();
+            
+            if ($result_saldo->num_rows === 0) {
+                $status_message = 'Error: Usuario no encontrado.';
+                $stmt_get->close();
+                goto end_post_processing;
+            }
+            
+            $user_data = $result_saldo->fetch_assoc();
+            $saldo_anterior = $user_data['saldo'];
             $nuevo_saldo = $saldo_anterior + $amount;
+            $stmt_get->close();
             
-            $stmt_check->close();
-
-            // Detalles de pago para la base de datos
-            $detalles_pago = "Recarga Digital Vía Web - Método: " . strtoupper($payment_method);
-            
-            // Validaciones Adicionales según el método
-            $valid_additional_fields = true;
-            if ($payment_method === 'tarjeta') {
-                 if (empty($dni) || empty($email)) {
-                     // Esta validación también se hace en JS, pero es CRÍTICA en el backend.
-                     $status_message = 'Error: Debes completar tu C.I. y Correo para la factura.';
-                     $valid_additional_fields = false;
-                 } else {
-                     $detalles_pago .= " - Factura a C.I.: {$dni}, Correo: {$email}";
-                 }
-            }
-            if ($payment_method === 'pago_movil') {
-                $detalles_pago .= " - Pendiente de Confirmación QR";
-            }
-            
-            if (!$valid_additional_fields) {
-                goto end_post_processing; 
-            }
-
-            // --- Paso 2: Iniciar Transacción (Actualización y Registro) ---
+            // Paso 2: Iniciar transacción
             $conn->begin_transaction();
             try {
                 
-                // a) Actualizar Saldo de la Tarjeta
-                $sql_update = "UPDATE TARJETA SET saldo_actual = ? WHERE tarjeta_id = ?";
+                // a) Actualizar saldo del usuario
+                $sql_update = "UPDATE USUARIO SET saldo = ? WHERE usuario_id = ?";
                 $stmt_update = $conn->prepare($sql_update);
-                $stmt_update->bind_param("di", $nuevo_saldo, $tarjeta_id);
+                $stmt_update->bind_param("di", $nuevo_saldo, $usuario_id);
                 
                 if (!$stmt_update->execute()) {
                     throw new Exception("Fallo al actualizar el saldo.");
                 }
                 $stmt_update->close();
 
-                // b) Registrar la Transacción (Recarga)
-                $tipo_movimiento = "Recarga Digital";
-                $sql_insert = "INSERT INTO TRANSACCION (tarjeta_id, tipo_movimiento, monto, fecha_hora, punto_id_recarga, detalles_pago)
-                               VALUES (?, ?, ?, NOW(), NULL, ?)";
+                // b) Registrar la transacción (sin tarjeta_id)
+                $tipo = "RECARGA";
+                $sql_insert = "INSERT INTO TRANSACCION (usuario_id, tipo, monto, fecha_hora)
+                               VALUES (?, ?, ?, NOW())";
                 $stmt_insert = $conn->prepare($sql_insert);
-                $stmt_insert->bind_param("isds", $tarjeta_id, $tipo_movimiento, $amount, $detalles_pago);
+                $stmt_insert->bind_param("isd", $usuario_id, $tipo, $amount);
 
                 if (!$stmt_insert->execute()) {
                     throw new Exception("Fallo al registrar la transacción.");
                 }
                 $stmt_insert->close();
 
-                // Paso 3: Confirmar Transacción
+                // Paso 3: Confirmar transacción
                 $conn->commit();
                 $is_success = true;
-                $status_message = "¡Recarga exitosa! Se han añadido " . number_format($amount, 2) . " Bs a tu tarjeta. Saldo actual: " . number_format($nuevo_saldo, 2) . " Bs.";
+                $status_message = "¡Recarga exitosa! Se han añadido " . number_format($amount, 2) . " Bs a tu cuenta. Saldo actual: " . number_format($nuevo_saldo, 2) . " Bs.";
                 
-                // ⭐ ACTUALIZAR SALDO EN SESIÓN si el usuario recargó su propia tarjeta (simplificación)
-                if ($user_is_logged_in && isset($_SESSION['tarjeta_id']) && $_SESSION['tarjeta_id'] == $tarjeta_id) {
-                    $_SESSION['saldo'] = $nuevo_saldo; 
-                }
+                // ⭐ ACTUALIZAR SALDO EN SESIÓN
+                $_SESSION['saldo'] = $nuevo_saldo; 
                 
             } catch (Exception $e) {
-                // Paso 4: Revertir Transacción si hay error
                 $conn->rollback();
-                // Opcional: Logear $e->getMessage()
-                $status_message = "Error en el procesamiento de la recarga: Transacción revertida."; 
+                $status_message = "Error en el procesamiento de la recarga: " . $e->getMessage(); 
+            }
+            
+        } else {
+            // ========== MODO TARJETA (Lógica original) ==========
+            
+            $card_id = trim($_POST['card_id'] ?? '');
+            
+            if (empty($card_id)) {
+                $status_message = 'Por favor, ingresa el código de la tarjeta NFC.';
+                goto end_post_processing;
+            }
+            
+            // --- Paso 1: Verificar la Tarjeta ---
+            $sql_check = "SELECT tarjeta_id, saldo_actual FROM TARJETA WHERE codigo_nfc = ?";
+            $stmt_check = $conn->prepare($sql_check);
+            $stmt_check->bind_param("s", $card_id);
+            $stmt_check->execute();
+            $result_check = $stmt_check->get_result();
+
+            if ($result_check->num_rows === 0) {
+                $status_message = 'Error: El código de tarjeta ingresado no existe en el sistema.';
+            } else {
+                // Tarjeta encontrada
+                $tarjeta_data = $result_check->fetch_assoc();
+                $tarjeta_id = $tarjeta_data['tarjeta_id'];
+                $saldo_anterior = $tarjeta_data['saldo_actual'];
+                $nuevo_saldo = $saldo_anterior + $amount;
+                
+                $stmt_check->close();
+
+                // --- Paso 2: Iniciar Transacción (Actualización y Registro) ---
+                $conn->begin_transaction();
+                try {
+                    
+                    // a) Actualizar Saldo de la Tarjeta
+                    $sql_update = "UPDATE TARJETA SET saldo_actual = ? WHERE tarjeta_id = ?";
+                    $stmt_update = $conn->prepare($sql_update);
+                    $stmt_update->bind_param("di", $nuevo_saldo, $tarjeta_id);
+                    
+                    if (!$stmt_update->execute()) {
+                        throw new Exception("Fallo al actualizar el saldo.");
+                    }
+                    $stmt_update->close();
+
+                    // b) Registrar la Transacción (Recarga)
+                    $tipo = "RECARGA";
+                    $sql_insert = "INSERT INTO TRANSACCION (tarjeta_id, tipo, monto, fecha_hora, punto_id_recarga)
+                                   VALUES (?, ?, ?, NOW(), NULL)";
+                    $stmt_insert = $conn->prepare($sql_insert);
+                    $stmt_insert->bind_param("isd", $tarjeta_id, $tipo, $amount);
+
+                    if (!$stmt_insert->execute()) {
+                        throw new Exception("Fallo al registrar la transacción.");
+                    }
+                    $stmt_insert->close();
+
+                    // Paso 3: Confirmar Transacción
+                    $conn->commit();
+                    $is_success = true;
+                    $status_message = "¡Recarga exitosa! Se han añadido " . number_format($amount, 2) . " Bs a la tarjeta. Saldo actual: " . number_format($nuevo_saldo, 2) . " Bs.";
+                    
+                } catch (Exception $e) {
+                    // Paso 4: Revertir Transacción si hay error
+                    $conn->rollback();
+                    $status_message = "Error en el procesamiento de la recarga: Transacción revertida."; 
+                }
             }
         }
     }
@@ -176,16 +249,35 @@ if (isset($conn)) {
             --color-safe-zone: #e3f2fd; 
             --color-safe-icon: #1e88e5;
             --color-error: #dc3545;
+            
+            --bg-primary: #ffffff;
+            --bg-secondary: #f4f7f9;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --border-color: #eee;
+            --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        [data-theme="dark"] {
+            --color-background-light: #1a1a1a;
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2a2a2a;
+            --text-primary: #e0e0e0;
+            --text-secondary: #b0b0b0;
+            --border-color: #404040;
+            --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: var(--color-background-light);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            transition: background-color 0.3s, color 0.3s;
         }
         
         /* --- Header / Menú Superior (Común) --- */
@@ -194,15 +286,30 @@ if (isset($conn)) {
             justify-content: space-between;
             align-items: center;
             padding: 15px 5%;
-            background-color: white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            background-color: var(--bg-primary);
+            box-shadow: var(--card-shadow);
+            border-bottom: 1px solid var(--border-color);
             width: 100%;
             box-sizing: border-box;
         }
         .logo { font-size: 1.2em; font-weight: bold; color: var(--color-primary); }
         .nav-menu { display: flex; gap: 20px; }
-        .nav-item { color: #666; text-decoration: none; padding: 5px 10px; border-radius: 5px; font-size: 0.95em; transition: background-color 0.2s, color 0.2s; }
-        .nav-item.active { background-color: #f0f0f0; color: var(--color-text-dark); font-weight: 500; }
+        .nav-item { color: var(--text-primary); text-decoration: none; padding: 5px 10px; border-radius: 5px; font-size: 0.95em; transition: background-color 0.2s; }
+        .nav-item.active { background-color: var(--bg-secondary); font-weight: 500; }
+        
+        .theme-toggle {
+            background: none;
+            border: none;
+            font-size: 1.3em;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+            color: var(--text-primary);
+        }
+        .theme-toggle:hover {
+            background-color: var(--bg-secondary);
+        }
         .saldo { font-size: 1em; color: var(--color-text-dark); font-weight: 600; }
 
         /* --- Contenido Principal de la Vista --- */
@@ -533,9 +640,8 @@ if (isset($conn)) {
             <?php if ($user_is_logged_in): ?>
                 <a href="recarga-digital.php" class="nav-item active">Recarga</a>
                 <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
-                <a href="mis-boletos.php" class="nav-item">Boletos</a>
                 <a href="historial-viaje.php" class="nav-item">Historial</a> 
-                <a href="perfil-usuario.php" class="nav-item">
+                <a href="perfil-pasajero.php" class="nav-item">
                     <i class="fas fa-user-circle"></i> Perfil
                 </a>
                 <a href="../backend/logout.php?redirect=recarga-digital.php" class="nav-item">
@@ -549,10 +655,14 @@ if (isset($conn)) {
             <?php endif; ?>
         </nav>
         
+        <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+            <i class="fas fa-moon"></i>
+        </button>
+        
         <div class="saldo">
             <?php if ($user_is_logged_in): ?>
                 <span style="margin-right: 15px; font-weight: 500;">¡Hola, <?php echo $nombre_usuario; ?>!</span>
-                Saldo: **Bs. <?php echo number_format($user_balance, 2); ?>**
+                Saldo: Bs. <?php echo number_format($user_balance, 2); ?>
             <?php else: ?>
                 Saldo: **No Disponible**
             <?php endif; ?>
@@ -571,13 +681,59 @@ if (isset($conn)) {
 
             <form action="recarga-digital.php" method="POST" id="recarga-form">
 
-                <section class="form-section" style="background-color: white; border: none; padding: 0;">
-                    <p style="font-size: 0.95em; color: var(--color-text-dark); margin-bottom: 10px;">Ingresa el ID de tu tarjeta Digital Transport</p>
+                <!-- SELECTOR DE MODO DE RECARGA -->
+                <section class="form-section" style="background-color: white; border: none; padding: 0; margin-bottom: 30px;">
+                    <p style="font-size: 0.95em; color: var(--color-text-dark); margin-bottom: 15px;">¿Cómo deseas realizar la recarga?</p>
+                    
+                    <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+                        <div class="recharge-mode-card selected" data-mode="account" style="flex: 1; border: 2px solid var(--color-secondary); border-radius: 8px; padding: 20px; cursor: pointer; transition: all 0.2s; background: #eef7ff;">
+                            <div style="font-size: 1.5em; margin-bottom: 10px;">🙋</div>
+                            <h3 style="margin: 0 0 5px 0; font-size: 1em; color: var(--color-text-dark);">Mi Cuenta</h3>
+                            <p style="font-size: 0.85em; color: #666; margin: 0;">Recarga directa</p>
+                        </div>
+                        
+                        <div class="recharge-mode-card" data-mode="card" style="flex: 1; border: 2px solid var(--color-border); border-radius: 8px; padding: 20px; cursor: not-allowed; transition: all 0.2s; background: white; opacity: 0.6; position: relative;">
+                            <div style="position: absolute; top: 5px; right: 5px; background: #ff9800; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600;">Próximamente</div>
+                            <div style="font-size: 1.5em; margin-bottom: 10px;">💳</div>
+                            <h3 style="margin: 0 0 5px 0; font-size: 1em; color: var(--color-text-dark);">Tarjeta Física</h3>
+                            <p style="font-size: 0.85em; color: #666; margin: 0;">Código NFC</p>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" id="recharge_mode" name="recharge_mode" value="account">
+                </section>
+
+                <!-- SECCIÓN DINÁMICA: INFORMACIÓN DE CUENTA -->
+                <section id="account-info-section" class="form-section" style="background-color: #f8f8f8; border: 1px solid var(--color-border); padding: 20px; border-radius: 8px;">
+                    <p style="font-size: 0.95em; color: var(--color-text-dark); margin-bottom: 15px; font-weight: 600;">
+                        <i class="fas fa-user-circle" style="color: var(--color-secondary); margin-right: 5px;"></i>
+                        Tu cuenta
+                    </p>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div>
+                            <label style="display: block; font-size: 0.85em; color: #666; margin-bottom: 5px;">Nombre</label>
+                            <p style="font-size: 1em; color: var(--color-text-dark); font-weight: 500; margin: 0;">
+                                <?php echo $nombre_usuario; ?>
+                            </p>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85em; color: #666; margin-bottom: 5px;">Saldo actual</label>
+                            <p style="font-size: 1.1em; color: var(--color-secondary); font-weight: 600; margin: 0;">
+                                Bs. <?php echo number_format($user_balance, 2); ?>
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN DINÁMICA: CÓDIGO NFC (inicialmente oculta) -->
+                <section id="card-info-section" class="form-section" style="background-color: white; border: none; padding: 0; display: none;">
+                    <p style="font-size: 0.95em; color: var(--color-text-dark); margin-bottom: 10px;">Ingresa el código de la tarjeta física</p>
                     
                     <div class="id-input-group">
-                        <label for="card-id">ID de Tarjeta Digital Transport <span>*</span></label>
-                        <input type="text" id="card-id" name="card_id" placeholder="Ej: 1234567890" value="" required>
-                        <small>El ID de 10 dígitos (Código NFC) se encuentra en el reverso de tu tarjeta</small>
+                        <label for="card-id">Código NFC de Tarjeta <span>*</span></label>
+                        <input type="text" id="card-id" name="card_id" placeholder="Ej: 1234567890" value="">
+                        <small>El código de 10 dígitos se encuentra en el reverso de la tarjeta física</small>
                     </div>
                 </section>
 
@@ -676,6 +832,51 @@ if (isset($conn)) {
     </footer>
 
     <script>
+        // === MODO DE RECARGA: Toggle entre Cuenta y Tarjeta ===
+        const rechargeModeCards = document.querySelectorAll('.recharge-mode-card');
+        const rechargeModeInput = document.getElementById('recharge_mode');
+        const accountInfoSection = document.getElementById('account-info-section');
+        const cardInfoSection = document.getElementById('card-info-section');
+        const cardIdInput = document.getElementById('card-id');
+        
+        rechargeModeCards.forEach(card => {
+            card.addEventListener('click', function() {
+                const mode = this.getAttribute('data-mode');
+                
+                // Prevenir selección de modo tarjeta (próximamente)
+                if (mode === 'card') {
+                    alert('⚠️ La opción de tarjeta física está disponible próximamente. Por ahora, usa la recarga a tu cuenta.');
+                    return;
+                }
+                
+                // Deseleccionar todas las tarjetas
+                rechargeModeCards.forEach(c => {
+                    c.classList.remove('selected');
+                    c.style.borderColor = 'var(--color-border)';
+                    c.style.background = 'white';
+                });
+                
+                // Seleccionar la tarjeta actual
+                this.classList.add('selected');
+                this.style.borderColor = 'var(--color-secondary)';
+                this.style.background = '#eef7ff';
+                
+                // Actualizar campo oculto
+                rechargeModeInput.value = mode;
+                
+                // Mostrar/ocultar secciones
+                if (mode === 'account') {
+                    accountInfoSection.style.display = 'block';
+                    cardInfoSection.style.display = 'none';
+                    cardIdInput.removeAttribute('required');
+                } else { // This else block will now only be reached if mode is 'card' and the alert above was bypassed, or if there were other modes.
+                    accountInfoSection.style.display = 'none';
+                    cardInfoSection.style.display = 'block';
+                    cardIdInput.setAttribute('required', 'required');
+                }
+            });
+        });
+
         // JS para manejar la selección de montos y los detalles de pago dinámicos
         const amountCards = document.querySelectorAll('.amount-card');
         const customInput = document.getElementById('amount-input');
@@ -848,14 +1049,23 @@ if (isset($conn)) {
 
         // 4. Validación Final con JS antes de enviar a PHP
         form.addEventListener('submit', function(e) {
+            const currentMode = rechargeModeInput.value;
             const cardId = document.getElementById('card-id').value.trim();
             const amountValue = parseFloat(customInput.value);
             const selectedMethod = paymentMethodInput.value;
             let validationError = '';
             
-            // Validación principal de ID y Monto
-            if (cardId.length < 5) { validationError = 'Error: El ID de tarjeta es demasiado corto o inválido.'; }
-            else if (isNaN(amountValue) || amountValue < 1) { validationError = 'Error: El monto de recarga debe ser de al menos 1 Bs.'; }
+            // Validación de monto (siempre requerido)
+            if (isNaN(amountValue) || amountValue < 1) { 
+                validationError = 'Error: El monto de recarga debe ser de al menos 1 Bs.'; 
+            }
+            
+            // Validación de card-id SOLO en modo tarjeta
+            if (!validationError && currentMode === 'card') {
+                if (cardId.length < 5) { 
+                    validationError = 'Error: El código de tarjeta es demasiado corto o inválido.'; 
+                }
+            }
             
             // Validaciones específicas del método
             if (!validationError) {
@@ -898,6 +1108,29 @@ if (isset($conn)) {
              updatePaymentDisplay(); 
          });
 
+        // TEMA OSCURO
+        const themeToggle = document.getElementById('theme-toggle');
+        const htmlElement = document.documentElement;
+        const themeIcon = themeToggle.querySelector('i');
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        htmlElement.setAttribute('data-theme', savedTheme);
+        updateThemeIcon(savedTheme);
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = htmlElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            htmlElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+        });
+        function updateThemeIcon(theme) {
+            if (theme === 'dark') {
+                themeIcon.classList.remove('fa-moon');
+                themeIcon.classList.add('fa-sun');
+            } else {
+                themeIcon.classList.remove('fa-sun');
+                themeIcon.classList.add('fa-moon');
+            }
+        }
     </script>
 
 </body>

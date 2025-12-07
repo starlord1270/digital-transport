@@ -262,8 +262,8 @@ if (isset($_SESSION['usuario_id'])) {
             };
 
             // Intentar autenticar al usuario usando el endpoint PHP unificado
-            // Ruta asumida: frontend/../backend/login.php
-            fetch('../backend/login.php', {
+            // Ruta asumida: frontend/../backend/validacion-login.php
+            fetch('../backend/validacion-login.php', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

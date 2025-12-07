@@ -275,7 +275,7 @@ if (!$user_is_logged_in) {
             <a href="puntos-recarga.php" class="nav-item">Puntos PR</a>
             <a href="mis-boletos.php" class="nav-item active">Boletos</a>
             <a href="historial-viaje.php" class="nav-item">Historial</a> 
-            <a href="perfil-usuario.php" class="nav-item">
+            <a href="perfil-pasajero.php" class="nav-item">
                 <i class="fas fa-user-circle"></i> Perfil
             </a>
             <a href="../backend/logout.php?redirect=mis-boletos.php" class="nav-item">
@@ -285,7 +285,7 @@ if (!$user_is_logged_in) {
         
         <div class="saldo">
             <span style="margin-right: 15px; font-weight: 500;">¡Hola, <?php echo $nombre_usuario; ?>!</span>
-            Saldo: **Bs. <?php echo number_format($user_balance, 2); ?>**
+            Saldo: Bs. <?php echo number_format($user_balance, 2); ?>
         </div>
     </header>
 

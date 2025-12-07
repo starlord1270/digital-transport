@@ -44,14 +44,28 @@ if ($user_type_actual != $user_type_expected || $linea_id_sesion == 0) {
             --color-background-light: #f4f7f9;
             --color-card-bg: #fff;
             --color-border: #e0e0e0;
+            
+            --bg-primary: #ffffff;
+            --bg-secondary: #f4f7f9;
+            --text-primary: #333;
+        }
+
+        [data-theme="dark"] {
+            --color-background-light: #1a1a1a;
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2a2a2a;
+            --text-primary: #e0e0e0;
+            --color-card-bg: #2a2a2a;
+            --color-border: #404040;
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: var(--color-background-light);
-            color: var(--color-text-dark);
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
         }
 
         .admin-container {
@@ -242,7 +256,10 @@ if ($user_type_actual != $user_type_expected || $linea_id_sesion == 0) {
         <div class="header-utility">
             <h1>Panel Administrativo - Línea de Transporte</h1>
             <div class="header-actions">
-                <a href="perfil-admin.php" class="profile-btn utility-btn">
+                <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <a href="perfil-admin.php" class="profile-btn utility-btn">>
                     <i class="fas fa-user"></i> Perfil
                 </a>
                 <a href="../../backend/logout.php" class="logout-btn utility-btn">
@@ -377,8 +394,33 @@ if ($user_type_actual != $user_type_expected || $linea_id_sesion == 0) {
         }
 
         // Cargar datos al iniciar
-        document.addEventListener('DOMContentLoaded', fetchDashboardData);
-
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchDashboardData();
+        
+            // TEMA OSCURO
+            const themeToggle = document.getElementById('theme-toggle');
+            const htmlElement = document.documentElement;
+            const themeIcon = themeToggle.querySelector('i');
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            htmlElement.setAttribute('data-theme', savedTheme);
+            updateThemeIcon(savedTheme);
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = htmlElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                htmlElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                updateThemeIcon(newTheme);
+            });
+            function updateThemeIcon(theme) {
+                if (theme === 'dark') {
+                    themeIcon.classList.remove('fa-moon');
+                    themeIcon.classList.add('fa-sun');
+                } else {
+                    themeIcon.classList.remove('fa-sun');
+                    themeIcon.classList.add('fa-moon');
+                }
+            }
+        });
     </script>
 </body>
 </html>

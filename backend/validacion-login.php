@@ -23,15 +23,29 @@ if ($conn->connect_error) {
 }
 
 // 3. Recoger y Sanear los datos
-if (!isset($_POST['email']) || !isset($_POST['password'])) {
+// 3. Recoger y Sanear los datos
+// INTENTO DE LEER JSON (Frontend moderno)
+$jsonData = json_decode(file_get_contents('php://input'), true);
+
+if ($jsonData) {
+    // Si viene JSON
+    $email_input = $jsonData['email'] ?? null;
+    $password_input = $jsonData['password'] ?? null;
+} else {
+    // Si viene Form Data tradicional
+    $email_input = $_POST['email'] ?? null;
+    $password_input = $_POST['password'] ?? null;
+}
+
+if (!$email_input || !$password_input) {
     $response['message'] = 'Faltan campos obligatorios.';
     $conn->close(); 
     echo json_encode($response);
     exit;
 }
 
-$email = $conn->real_escape_string(trim($_POST['email']));
-$password = $_POST['password'];
+$email = $conn->real_escape_string(trim($email_input));
+$password = $password_input;
 
 // 4. Preparar la consulta SQL
 $sql = "SELECT usuario_id, password_hash, tipo_usuario_id, nombre_completo FROM USUARIO WHERE email = ?"; 
@@ -122,9 +136,10 @@ if ($user) {
         
         } else {
             // OTROS USUARIOS (Pasajero, Admin Central, etc.)
+            // REDIRECCIÓN CORREGIDA: Apuntar al index.php del frontend que actúa como dashboard de pasajero
             $response['success'] = true;
             $response['message'] = '¡Bienvenido! Redirigiendo...';
-            $response['redirect'] = '/Competencia-Analisis/digital-transport/frontend/cliente/panel-principal.php'; 
+            $response['redirect'] = '/Competencia-Analisis/digital-transport/frontend/index.php'; 
         }
         
     } else {

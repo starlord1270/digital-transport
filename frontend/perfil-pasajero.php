@@ -1,3 +1,23 @@
+<?php
+// backend/perfil-pasajero.php
+
+// 1. GESTIÓN DE SESIONES
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// 🛑 VERIFICACIÓN DE SESIÓN 🛑
+$valid_roles = [1, 2, 5, 6];
+$user_is_logged_in = (
+    isset($_SESSION['usuario_id']) && 
+    in_array($_SESSION['tipo_usuario_id'], $valid_roles)
+);
+
+if (!$user_is_logged_in) {
+    header("Location: inicio-sesion-usuarios.php");
+    exit();
+}
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -10,10 +30,53 @@
             --color-secondary: #1e88e5;
             --color-success: #4CAF50;
             --color-error: #f44336;
+            
+            --bg-primary: #ffffff;
+            --bg-secondary: #f4f5f7;
+            --text-primary: #333;
+            --text-secondary: #666;
         }
 
-        body { font-family: Arial, sans-serif; background-color: #f4f5f7; padding: 20px; }
-        .perfil-container { max-width: 650px; margin: auto; background: white; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        [data-theme="dark"] {
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2a2a2a;
+            --text-primary: #e0e0e0;
+            --text-secondary: #b0b0b0;
+        }
+
+        body { 
+            font-family: Arial, sans-serif; 
+            background-color: var(--bg-secondary); 
+            color: var(--text-primary);
+            padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .perfil-container { 
+            max-width: 650px; 
+            margin: auto; 
+            background: var(--bg-primary); 
+            border-radius: 8px; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            font-size: 1.3em;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+            color: var(--text-primary);
+            z-index: 10;
+        }
+        .theme-toggle:hover {
+            background-color: rgba(0,0,0,0.1);
+        }
         
         /* HEADER AZUL CLARO (PASAJERO) */
         .header-perfil { 
@@ -149,6 +212,9 @@
 <body>
 
 <div class="perfil-container">
+    <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+        <i class="fas fa-moon"></i>
+    </button>
     <div class="header-perfil">
         <div class="user-info">
             <div class="user-avatar" id="user-initials">--</div>
@@ -394,7 +460,7 @@
                 alert("Error: " + result.message);
                 
                 if (result.message.includes('Acceso denegado') || result.message.includes('sesión no válida')) {
-                     window.location.href = '../inicio-sesion-lineas-choferes/login.php'; 
+                     window.location.href = 'inicio-sesion-usuarios.php'; 
                 }
             }
         } catch (error) {
@@ -525,6 +591,29 @@
     // 🛑 LLAMADA DE CARGA INMEDIATA
     fetchInitialData();
     
+    // TEMA OSCURO
+    const themeToggle = document.getElementById('theme-toggle');
+    const htmlElement = document.documentElement;
+    const themeIcon = themeToggle.querySelector('i');
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    htmlElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcon(savedTheme);
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = htmlElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        htmlElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        updateThemeIcon(newTheme);
+    });
+    function updateThemeIcon(theme) {
+        if (theme === 'dark') {
+            themeIcon.classList.remove('fa-moon');
+            themeIcon.classList.add('fa-sun');
+        } else {
+            themeIcon.classList.remove('fa-sun');
+            themeIcon.classList.add('fa-moon');
+        }
+    }
 </script>
 </body>
 </html>
