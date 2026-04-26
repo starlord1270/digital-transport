@@ -1,0 +1,15 @@
+- [x] Inicialización y Documentación del Proyecto
+    - [x] Actualizar README.md con detalles del proyecto
+    - [x] Inicializar estructura del proyecto (crear directorios faltantes)
+- [x] Base del Núcleo
+    - [x] Crear sistema de diseño moderno en `css/style.css`
+    - [x] Implementar envoltorio de base de datos PDO
+- [x] Refactorización de la Interfaz de Usuario (UI)
+    - [x] Crear `includes/header.php`
+    - [x] Crear `includes/footer.php`
+    - [x] Actualizar `index.php` con el nuevo diseño
+- [ ] Mejoras de Funcionalidades
+    - [/] Mejorar la UI/UX del "Pase Digital"
+- [ ] Verificación
+    - [ ] Ejecutar pruebas PHPUnit
+    - [ ] Verificación manual de la interfaz
