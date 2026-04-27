@@ -81,13 +81,16 @@ $show_low_balance_alert = ($user_is_logged_in && !$is_chofer && !$is_admin_linea
                         <?php if ($is_chofer): ?>
                             <!-- Menú exclusivo para CHOFER -->
                             <li><a href="<?php echo $path_prefix; ?>choferes/cobro-chofer.php" class="<?php echo ($active_page == 'cobro') ? 'active' : ''; ?>"><i class="fas fa-qrcode"></i> Panel de Cobro</a></li>
+                            <li><a href="<?php echo $path_prefix; ?>ayuda.php" class="<?php echo ($active_page == 'ayuda') ? 'active' : ''; ?>"><i class="fas fa-question-circle"></i> Ayuda</a></li>
                             <li><a href="<?php echo $path_prefix; ?>choferes/perfil-chofer.php" class="<?php echo ($active_page == 'perfil') ? 'active' : ''; ?>"><i class="fas fa-user-circle"></i> Perfil</a></li>
                         <?php elseif ($is_admin_linea): ?>
                             <!-- Menú exclusivo para ADMIN LÍNEA -->
                             <li><a href="<?php echo $path_prefix; ?>dashboard-admin-linea/dashboard-admin.php" class="<?php echo ($active_page == 'dashboard') ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+                            <li><a href="<?php echo $path_prefix; ?>ayuda.php" class="<?php echo ($active_page == 'ayuda') ? 'active' : ''; ?>"><i class="fas fa-question-circle"></i> Ayuda</a></li>
                         <?php elseif ($is_super_admin): ?>
                             <!-- Menú exclusivo para SUPER ADMIN -->
                             <li><a href="<?php echo $path_prefix; ?>dashboard-superadmin/dashboard.php" class="<?php echo ($active_page == 'dashboard') ? 'active' : ''; ?>"><i class="fas fa-crown"></i> Master Panel</a></li>
+                            <li><a href="<?php echo $path_prefix; ?>ayuda.php" class="<?php echo ($active_page == 'ayuda') ? 'active' : ''; ?>"><i class="fas fa-question-circle"></i> Ayuda</a></li>
                             <li><a href="<?php echo $path_prefix; ?>dashboard-superadmin/lineas.php" class="<?php echo ($active_page == 'lineas') ? 'active' : ''; ?>">Líneas</a></li>
                             <li><a href="<?php echo $path_prefix; ?>dashboard-superadmin/finanzas.php" class="<?php echo ($active_page == 'finanzas') ? 'active' : ''; ?>">Finanzas</a></li>
                         <?php else: ?>
@@ -96,6 +99,7 @@ $show_low_balance_alert = ($user_is_logged_in && !$is_chofer && !$is_admin_linea
                             <li><a href="<?php echo $path_prefix; ?>recarga-digital.php" class="<?php echo ($active_page == 'recarga') ? 'active' : ''; ?>">Recarga</a></li>
                             <li><a href="<?php echo $path_prefix; ?>puntos-recarga.php" class="<?php echo ($active_page == 'puntos') ? 'active' : ''; ?>">Puntos PR</a></li>
                             <li><a href="<?php echo $path_prefix; ?>historial-viaje.php" class="<?php echo ($active_page == 'historial') ? 'active' : ''; ?>">Historial</a></li>
+                            <li><a href="<?php echo $path_prefix; ?>ayuda.php" class="<?php echo ($active_page == 'ayuda') ? 'active' : ''; ?>"><i class="fas fa-question-circle"></i> Ayuda</a></li>
                             <li><a href="<?php echo $path_prefix; ?>perfil-pasajero.php" class="<?php echo ($active_page == 'perfil') ? 'active' : ''; ?>"><i class="fas fa-user-circle"></i> Perfil</a></li>
                         <?php endif; ?>
                         <li><a href="<?php echo $path_prefix; ?>../backend/logout.php?redirect=index.php" class="btn btn-secondary" style="padding: 8px 16px;">Salir</a></li>
