@@ -1,84 +1,73 @@
 <?php
-// backend/fetch-perfil-chofer.php
-
+/**
+ * DIGITAL TRANSPORT - FETCH PERFIL CHOFER (PDO - ULTRA ROBUSTO)
+ */
 header('Content-Type: application/json');
-session_start();
 
-$response = ['success' => false, 'message' => ''];
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-// 1. Verificación de Sesión y Rol (Debe ser CHOFER = 3)
-if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || $_SESSION['tipo_usuario_id'] != 3) {
-    $response['message'] = 'Acceso denegado o sesión no válida.';
-    echo json_encode($response);
+require_once 'includes/db.php';
+
+// 1. Verificación básica de sesión
+if (!isset($_SESSION['usuario_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Sesión no iniciada.']);
     exit;
 }
 
-$usuario_id = $_SESSION['usuario_id'];
-require_once 'bd.php'; // Incluir la conexión a la base de datos
+try {
+    $usuario_id = $_SESSION['usuario_id'];
 
-if ($conn->connect_error) {
-    $response['message'] = 'Error de conexión a la base de datos: ' . $conn->connect_error;
-    echo json_encode($response);
-    exit;
-}
-
-// 2. Consulta para obtener todos los datos del chofer, su vehículo y línea
-$sql = "
-    SELECT
-        U.nombre_completo,
-        U.documento_identidad,
-        U.email,
-        U.fecha_registro,
-        C.licencia,
-        C.vehiculo_placa,
-        L.nombre AS linea_administrada,
-        V.modelo AS vehiculo_modelo,
-        V.capacidad
-    FROM
-        USUARIO U
-    INNER JOIN
-        CHOFER C ON U.usuario_id = C.usuario_id
-    INNER JOIN
-        LINEA L ON C.linea_id = L.linea_id
-    INNER JOIN
-        VEHICULO V ON C.vehiculo_placa = V.placa
-    WHERE
-        U.usuario_id = ?
-";
-
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $usuario_id);
-$stmt->execute();
-$result = $stmt->get_result();
-$data = $result->fetch_assoc();
-$stmt->close();
-$conn->close();
-
-if ($data) {
-    // Formatear la fecha de registro
-    $fecha_registro = new DateTime($data['fecha_registro']);
-    $miembro_desde = $fecha_registro->format('F Y'); // Ejemplo: Marzo 2023
-
-    // Simular un rating (debería venir de una tabla de calificaciones)
-    $rating = '4.8 (3420 viajes)';
+    // 2. Consulta con LEFT JOINs para evitar que la falta de datos en tablas secundarias bloquee todo
+    $sql = "SELECT 
+                u.nombre_completo, 
+                u.email, 
+                u.documento_identidad, 
+                u.fecha_registro,
+                u.tipo_usuario_id,
+                c.licencia, 
+                c.rating, 
+                c.estado_servicio,
+                l.nombre as linea_name, 
+                v.placa, 
+                v.modelo, 
+                v.capacidad
+            FROM USUARIO u
+            LEFT JOIN CHOFER c ON u.usuario_id = c.usuario_id
+            LEFT JOIN LINEA l ON c.linea_id = l.linea_id
+            LEFT JOIN VEHICULO v ON c.vehiculo_placa = v.placa
+            WHERE u.usuario_id = ?";
     
-    // Preparar la respuesta
-    $response['success'] = true;
-    $response['data'] = [
-        'nombre_completo' => $data['nombre_completo'],
-        'documento_identidad' => $data['documento_identidad'] . ' LP', // Añadir el sufijo de región
-        'email' => $data['email'],
-        'licencia' => $data['licencia'],
-        'miembro_desde' => $miembro_desde,
-        'linea_name' => $data['linea_administrada'],
-        'placa' => $data['vehiculo_placa'],
-        'modelo' => $data['vehiculo_modelo'],
-        'capacidad' => $data['capacidad'],
-        'rating' => $rating
-    ];
-} else {
-    $response['message'] = 'No se encontraron datos de chofer para este usuario.';
-}
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$usuario_id]);
+    $data = $stmt->fetch(PDO::FETCH_ASSOC);
 
-echo json_encode($response);
+    if ($data) {
+        // Formatear datos para el frontend
+        $result = [
+            'nombre_completo' => $data['nombre_completo'] ?? 'Usuario sin nombre',
+            'email' => $data['email'] ?? 'Sin email',
+            'documento_identidad' => $data['documento_identidad'] ?? 'S/N',
+            'miembro_desde' => $data['fecha_registro'] ? date('M Y', strtotime($data['fecha_registro'])) : '---',
+            'licencia' => $data['licencia'] ?? 'No registrada',
+            'rating' => number_format(floatval($data['rating'] ?? 0), 1),
+            'linea_name' => $data['linea_name'] ?? 'Línea no asignada',
+            'placa' => $data['placa'] ?? 'Sin placa',
+            'modelo' => $data['modelo'] ?? 'Modelo no registrado',
+            'capacidad' => ($data['capacidad'] ?? '0') . ' pasajeros'
+        ];
+
+        echo json_encode(['success' => true, 'data' => $result]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'No se encontró el registro del usuario en la base de datos.']);
+    }
+
+} catch (PDOException $e) {
+    // Registrar el error detallado en el log del servidor
+    error_log("Error en fetch-perfil-chofer: " . $e->getMessage());
+    echo json_encode(['success' => false, 'message' => 'Error de base de datos: ' . $e->getMessage()]);
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Error general: ' . $e->getMessage()]);
+}
 ?>

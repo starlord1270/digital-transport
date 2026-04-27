@@ -1,58 +1,25 @@
 <?php
 /**
- * Archivo: db_connection.php
- * Propósito: Establecer y manejar la conexión a la base de datos 'digital-transport'.
- * Uso: Incluir este archivo en cualquier script PHP que necesite interactuar con la BD.
+ * DIGITAL TRANSPORT - LEGACY DATABASE WRAPPER (MIGRATED TO PDO)
+ * 
+ * Este archivo se ha actualizado para redirigir al nuevo envoltorio PDO
+ * cumpliendo con la regla de "eliminar rastro de mysqli".
+ * 
+ * NOTA: Para archivos que aún usen la variable $conn, ahora recibirán
+ * un objeto PDO en lugar de MySQLi.
  */
 
-// ----------------------------------------------------
-// 1. Configuración de Credenciales
-// ----------------------------------------------------
+require_once __DIR__ . '/includes/db.php';
 
-// Define las constantes de conexión. Asegúrate de modificar estos valores
-// con las credenciales reales de tu servidor MySQL (generalmente localhost).
-define('DB_SERVER', 'localhost');
-define('DB_USERNAME', 'root');   // Usuario por defecto en XAMPP/WAMP
-define('DB_PASSWORD', '');       // Contraseña por defecto en XAMPP/WAMP (dejar vacío si no tienes)
-define('DB_NAME', 'digital-transport');
+// Mantenemos la variable $conn para compatibilidad con archivos no refactorizados,
+// pero ahora es un objeto PDO.
+$conn = $pdo;
 
-// ----------------------------------------------------
-// 2. Establecer la Conexión
-// ----------------------------------------------------
+// Las constantes de conexión ya están en includes/db.php, pero si se necesitan:
+if (!defined('DB_SERVER')) define('DB_SERVER', 'localhost');
+if (!defined('DB_USERNAME')) define('DB_USERNAME', 'root');
+if (!defined('DB_PASSWORD')) define('DB_PASSWORD', '');
+if (!defined('DB_NAME')) define('DB_NAME', 'digital-transport');
 
-// Crea una nueva instancia de la clase mysqli.
-// La variable $conn contendrá el objeto de conexión.
-$conn = new mysqli(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME);
-
-// ----------------------------------------------------
-// 3. Verificar la Conexión
-// ----------------------------------------------------
-
-// Verifica si hubo algún error al intentar conectar
-if ($conn->connect_error) {
-    // Si la conexión falla, muestra un mensaje de error y detiene el script
-    die("Error de conexión a la base de datos: " . $conn->connect_error);
-}
-
-// ----------------------------------------------------
-// 4. Configuración de Caracteres
-// ----------------------------------------------------
-
-// Establece el conjunto de caracteres a UTF-8 para evitar problemas con acentos y caracteres especiales
-if (!$conn->set_charset("utf8")) {
-    // Muestra una advertencia si no se puede establecer el charset
-    error_log("Advertencia: Error al cargar el conjunto de caracteres utf8: " . $conn->error);
-}
-
-// Nota: Una vez que este archivo se incluye, la variable $conn estará disponible
-// para ejecutar consultas SQL en el script que lo incluyó.
-
-// Ejemplo de cómo cerrar la conexión (opcional, ya que PHP la cierra al terminar)
-/*
-function cerrar_conexion($conn) {
-    if ($conn) {
-        $conn->close();
-    }
-}
-*/
+// Nota: set_charset("utf8") no es necesario en PDO ya que se define en el DSN.
 ?>

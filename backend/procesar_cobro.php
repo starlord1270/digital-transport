@@ -1,193 +1,116 @@
 <?php
 /**
- * Archivo: procesar_cobro.php
- * Descripción: Procesa el cobro de pasaje mediante código QR escaneado por el chofer
- * Valida el QR, verifica saldo, descuenta el monto y registra la transacción
+ * DIGITAL TRANSPORT - PROCESAR COBRO (SEGURIDAD REFORZADA)
+ * Detección automática de tarifa basada en el perfil del usuario para evitar fraudes.
  */
-
 header('Content-Type: application/json');
 
-// 1. Iniciar sesión
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// 2. Verificar que el chofer esté logueado
-if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo_usuario_id'] != 3) {
-    http_response_code(401);
-    echo json_encode([
-        'success' => false,
-        'error' => 'Acceso denegado. Debe estar logueado como chofer.'
-    ]);
+require_once 'includes/db.php';
+
+// 1. Verificar sesión básica
+if (!isset($_SESSION['usuario_id'])) {
+    echo json_encode(['success' => false, 'error' => 'No autorizado.']);
     exit;
 }
 
-// Obtener el usuario_id del chofer de la sesión
-$chofer_usuario_id = $_SESSION['usuario_id'];
+$data = json_decode(file_get_contents('php://input'), true);
+$usuario_id = 0;
+$chofer_id = 0;
 
-// 3. Consultar el chofer_id desde la base de datos
-require_once 'bd.php';
-
-$sql_chofer = "SELECT chofer_id FROM CHOFER WHERE usuario_id = ?";
-$stmt_chofer = $conn->prepare($sql_chofer);
-$stmt_chofer->bind_param("i", $chofer_usuario_id);
-$stmt_chofer->execute();
-$result_chofer = $stmt_chofer->get_result();
-
-if ($result_chofer->num_rows === 0) {
-    http_response_code(404);
-    echo json_encode([
-        'success' => false,
-        'error' => 'Error: Chofer no encontrado en la base de datos.'
-    ]);
-    $stmt_chofer->close();
-    $conn->close();
-    exit;
+// DETERMINAR MODO DE COBRO E IDENTIFICAR PASAJERO
+if (isset($data['bus_payment']) && $data['bus_payment'] === true) {
+    // MODO: PASAJERO ESCANEA AL BUS
+    $usuario_id = $_SESSION['usuario_id'];
+    $chofer_id = intval($data['chofer_id'] ?? 0);
+} else {
+    // MODO: CHOFER ESCANEA AL PASAJERO
+    if ($_SESSION['tipo_usuario_id'] != 3) {
+        echo json_encode(['success' => false, 'error' => 'Acceso denegado.']);
+        exit;
+    }
+    
+    $qrData = trim($data['qrData'] ?? '');
+    if (strpos($qrData, 'DT-USER-') === 0) {
+        $usuario_id = intval(explode('-', $qrData)[2]);
+    } elseif (strpos($qrData, 'USER_') === 0) {
+        $usuario_id = intval(explode('_', $qrData)[1]);
+    }
+    
+    $stmt = $pdo->prepare("SELECT chofer_id FROM CHOFER WHERE usuario_id = ?");
+    $stmt->execute([$_SESSION['usuario_id']]);
+    $chofer_id = $stmt->fetchColumn();
 }
 
-$chofer_data = $result_chofer->fetch_assoc();
-$chofer_id = $chofer_data['chofer_id'];
-$stmt_chofer->close();
-
-// 4. Recibir datos JSON del frontend
-$input = file_get_contents('php://input');
-$data = json_decode($input, true);
-
-if (!$data) {
-    http_response_code(400);
-    echo json_encode([
-        'success' => false,
-        'error' => 'Datos JSON inválidos.'
-    ]);
+if ($usuario_id <= 0 || $chofer_id <= 0) {
+    echo json_encode(['success' => false, 'error' => 'Identificación fallida.']);
     exit;
 }
-
-$qrData = trim($data['qrData'] ?? '');
-$tarifaId = intval($data['tarifaId'] ?? 0);
-$monto = floatval($data['monto'] ?? 0);
-
-// 5. Validar datos básicos
-if (empty($qrData) || $tarifaId <= 0 || $monto <= 0) {
-    http_response_code(400);
-    echo json_encode([
-        'success' => false,
-        'error' => 'Datos incompletos o inválidos.'
-    ]);
-    exit;
-}
-
-// 6. Extraer usuario_id del código QR
-// Formato esperado: DT-USER-{usuario_id}-{timestamp}
-$parts = explode('-', $qrData);
-
-if (count($parts) < 3 || $parts[0] !== 'DT' || $parts[1] !== 'USER') {
-    http_response_code(400);
-    echo json_encode([
-        'success' => false,
-        'error' => 'Código QR inválido. Formato no reconocido.'
-    ]);
-    exit;
-}
-
-$usuario_id = intval($parts[2]);
-
-if ($usuario_id <= 0) {
-    http_response_code(400);
-    echo json_encode([
-        'success' => false,
-        'error' => 'Código QR inválido. ID de usuario no válido.'
-    ]);
-    exit;
-}
-
-// 6. Conectar a la base de datos
-require_once 'bd.php';
-
-// 7. Verificar que el usuario existe y obtener su saldo actual
-$sql_usuario = "SELECT nombre_completo, saldo, tipo_usuario_id FROM USUARIO WHERE usuario_id = ?";
-$stmt_usuario = $conn->prepare($sql_usuario);
-$stmt_usuario->bind_param("i", $usuario_id);
-$stmt_usuario->execute();
-$result_usuario = $stmt_usuario->get_result();
-
-if ($result_usuario->num_rows === 0) {
-    http_response_code(404);
-    echo json_encode([
-        'success' => false,
-        'error' => 'Usuario no encontrado en el sistema.'
-    ]);
-    $stmt_usuario->close();
-    $conn->close();
-    exit;
-}
-
-$usuario_data = $result_usuario->fetch_assoc();
-$nombre_completo = $usuario_data['nombre_completo'];
-$saldo_actual = floatval($usuario_data['saldo']);
-$tipo_usuario = intval($usuario_data['tipo_usuario_id']);
-$stmt_usuario->close();
-
-// 8. Verificar que el saldo sea suficiente
-if ($saldo_actual < $monto) {
-    http_response_code(400);
-    echo json_encode([
-        'success' => false,
-        'error' => "Saldo insuficiente. Saldo actual: Bs. " . number_format($saldo_actual, 2)
-    ]);
-    $conn->close();
-    exit;
-}
-
-// 9. Iniciar transacción SQL
-$conn->begin_transaction();
 
 try {
-    // a) Descontar el monto del saldo del usuario
-    $nuevo_saldo = $saldo_actual - $monto;
-    $sql_update_saldo = "UPDATE USUARIO SET saldo = ? WHERE usuario_id = ?";
-    $stmt_update = $conn->prepare($sql_update_saldo);
-    $stmt_update->bind_param("di", $nuevo_saldo, $usuario_id);
-    
-    if (!$stmt_update->execute()) {
-        throw new Exception("Fallo al actualizar el saldo del usuario.");
+    $pdo->beginTransaction();
+
+    // 2. DETECCIÓN AUTOMÁTICA DE TARIFA (SEGURIDAD LADO SERVIDOR)
+    // Buscamos si el pasajero tiene una validación especial aprobada
+    $stmt = $pdo->prepare("
+        SELECT tipo_desc_id 
+        FROM VALIDACION_ESPECIAL 
+        WHERE usuario_id = ? AND estado_validacion = 'APROBADA' 
+        LIMIT 1
+    ");
+    $stmt->execute([$usuario_id]);
+    $tipo_desc_id = $stmt->fetchColumn() ?: 1; // 1 = Estándar
+
+    // Obtener el monto de la tarifa oficial para ese tipo de descuento
+    $stmt = $pdo->prepare("SELECT tarifa_id, monto FROM TARIFA WHERE tipo_desc_id = ? LIMIT 1");
+    $stmt->execute([$tipo_desc_id]);
+    $tarifa_oficial = $stmt->fetch();
+
+    if (!$tarifa_oficial) {
+        // Fallback a tarifa estándar
+        $stmt = $pdo->query("SELECT tarifa_id, monto FROM TARIFA WHERE tipo_desc_id = 1 LIMIT 1");
+        $tarifa_oficial = $stmt->fetch();
     }
-    $stmt_update->close();
-    
-    // b) Registrar la transacción en la tabla TRANSACCION
-    $tipo = "COBRO";
-    $sql_insert = "INSERT INTO TRANSACCION (tipo, monto, usuario_id, chofer_id_cobro, fecha_hora) 
-                   VALUES (?, ?, ?, ?, NOW())";
-    $stmt_insert = $conn->prepare($sql_insert);
-    $stmt_insert->bind_param("sdii", $tipo, $monto, $usuario_id, $chofer_id);
-    
-    if (!$stmt_insert->execute()) {
-        throw new Exception("Fallo al registrar la transacción.");
+
+    $monto_a_cobrar = floatval($tarifa_oficial['monto']);
+
+    // 3. Validar pasajero y saldo
+    $stmt = $pdo->prepare("SELECT nombre_completo, saldo FROM USUARIO WHERE usuario_id = ? FOR UPDATE");
+    $stmt->execute([$usuario_id]);
+    $pasajero = $stmt->fetch();
+
+    if (!$pasajero) throw new Exception("Pasajero no encontrado.");
+    if ($pasajero['saldo'] < $monto_a_cobrar) {
+        throw new Exception("Saldo insuficiente. Tu tarifa es de Bs. " . number_format($monto_a_cobrar, 2));
     }
-    $stmt_insert->close();
-    
-    // c) Confirmar transacción
-    $conn->commit();
-    
-    // Respuesta exitosa
+
+    // 4. Realizar cobro
+    $nuevo_saldo = $pasajero['saldo'] - $monto_a_cobrar;
+    $stmt = $pdo->prepare("UPDATE USUARIO SET saldo = ? WHERE usuario_id = ?");
+    $stmt->execute([$nuevo_saldo, $usuario_id]);
+
+    // 5. Registrar transacción
+    $stmt = $pdo->prepare("
+        INSERT INTO TRANSACCION (tipo, monto, usuario_id, chofer_id_cobro, fecha_hora) 
+        VALUES ('COBRO', ?, ?, ?, NOW())
+    ");
+    $stmt->execute([$monto_a_cobrar, $usuario_id, $chofer_id]);
+
+    $pdo->commit();
+
     echo json_encode([
         'success' => true,
-        'message' => 'Cobro procesado exitosamente',
-        'pasajero' => $nombre_completo,
-        'monto_cobrado' => number_format($monto, 2),
-        'nuevo_saldo' => number_format($nuevo_saldo, 2)
+        'message' => '¡Pago Procesado!',
+        'pasajero' => explode(' ', $pasajero['nombre_completo'])[0],
+        'monto' => number_format($monto_a_cobrar, 2),
+        'tarifa' => ($tipo_desc_id == 2 ? 'Estudiante' : 'Estándar')
     ]);
-    
-} catch (Exception $e) {
-    // d) Revertir transacción en caso de error
-    $conn->rollback();
-    
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'error' => 'Error al procesar el cobro: ' . $e->getMessage()
-    ]);
-}
 
-// 10. Cerrar conexión
-$conn->close();
+} catch (Exception $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+}
 ?>

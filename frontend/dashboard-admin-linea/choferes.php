@@ -1,332 +1,217 @@
-<?php 
-// 1. ASEGURAR SESIÓN INICIADA (Debe ser lo primero)
-if (session_status() == PHP_SESSION_NONE) {
+<?php
+/**
+ * DIGITAL TRANSPORT - GESTIÓN DE CHOFERES (PREMIUM)
+ */
+$page_title = "Gestión de Choferes - Digital Transport";
+$active_page = "choferes";
+
+if (session_status() === PHP_SESSION_NONE) {
     session_start();
-} 
+}
 
-// 🛑 INICIO DE VERIFICACIÓN DE SEGURIDAD Y ROL (RBAC) 🛑
-
-// Tipo de usuario esperado para esta página: 4 (ADMIN_LINEA)
-$user_type_expected = 4;
-$user_type_actual = isset($_SESSION['tipo_usuario_id']) ? $_SESSION['tipo_usuario_id'] : 0;
-$linea_id_sesion = isset($_SESSION['linea_id']) ? $_SESSION['linea_id'] : 0; 
-
-// Si el usuario no está logueado, O el tipo de usuario no es 4, O no tiene linea_id asignado, redirigir.
-if ($user_type_actual != $user_type_expected || $linea_id_sesion == 0) {
-    session_unset();
-    session_destroy();
-    
-    $login_url = '/Competencia-Analisis/digital-transport/frontend/inicio-sesion-lineas-choferes/login.php';
-    header("Location: " . $login_url . "?error=acceso_denegado");
+// Verificación de Seguridad y Rol
+if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo_usuario_id'] != 4 || !isset($_SESSION['linea_id'])) {
+    header("Location: ../inicio-sesion-usuarios.php?error=acceso_denegado");
     exit;
 }
 
-// 🛑 FIN DE VERIFICACIÓN DE SEGURIDAD Y ROL 🛑
+$linea_id_sesion = $_SESSION['linea_id'];
+
+include '../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Choferes - Digital Transport</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    
-    <style>
-        :root {
-            --color-primary: #0b2e88;
-            --color-secondary: #1e88e5;
-            --color-success: #4caf50;
-            --color-error: #f44336;
-            --color-text-dark: #333;
-            --color-background-light: #f4f7f9;
-            --color-card-bg: #fff;
-            --color-border: #e0e0e0;
-            
-            --bg-primary: #ffffff;
-            --bg-secondary: #f4f7f9;
-            --text-primary: #333;
-        }
 
-        [data-theme="dark"] {
-            --color-background-light: #1a1a1a;
-            --bg-primary: #1e1e1e;
-            --bg-secondary: #2a2a2a;
-            --text-primary: #e0e0e0;
-            --color-card-bg: #2a2a2a;
-            --color-border: #404040;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-secondary);
-            color: var(--text-primary);
-            transition: background-color 0.3s, color 0.3s;
-        }
-
-        .admin-container {
-            width: 95%;
-            max-width: 1200px;
-            margin: 20px auto;
-            padding: 20px;
-            background-color: var(--color-card-bg);
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            position: relative;
-        }
-
-        .header-utility {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid var(--color-border);
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-        }
-
-        .header-utility h1 {
-            color: var(--color-primary);
-            margin: 0;
-            border-bottom: none;
-            padding-bottom: 0;
-        }
-
-        .logout-btn {
-            text-decoration: none;
-            color: var(--color-error);
-            font-weight: 600;
-            padding: 8px 15px;
-            border: 1px solid var(--color-error);
-            border-radius: 4px;
-            transition: background-color 0.3s, color 0.3s;
-        }
-
-        .logout-btn:hover {
-            background-color: var(--color-error);
-            color: var(--color-card-bg);
-        }
-
-        /* BOTÓN TEMA */
-        .theme-toggle {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: none;
-            border: none;
-            font-size: 1.4em;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 50%;
-            color: var(--text-primary);
-            transition: color 0.3s;
-        }
-
-        h1 {
-            color: var(--color-primary);
-        }
-
-        .tabs {
-            display: flex;
-            border-bottom: 1px solid var(--color-border);
-            margin-bottom: 20px;
-        }
-
-        .tab-btn {
-            padding: 10px 20px;
-            cursor: pointer;
-            border: none;
-            background: none;
-            font-size: 1em;
-            font-weight: 600;
-            color: var(--color-text-dark);
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }
-
-        .tab-btn.active {
-            color: var(--color-primary);
-            border-bottom: 3px solid var(--color-primary);
-        }
-
-        .gestion-choferes-box {
-            background-color: var(--color-card-bg);
-            padding: 20px;
-            border-radius: 8px;
-            border: 1px solid var(--color-border);
-        }
-
-        .choferes-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .choferes-table th, .choferes-table td {
-            padding: 12px;
-            border-bottom: 1px solid var(--color-border);
-        }
-
-        .choferes-table th {
-            background-color: var(--color-background-light);
-        }
-
-        /* Estado */
-        .status-tag {
-            padding: 4px 8px;
-            border-radius: 4px;
-            color: white;
-            font-size: 0.8em;
-            font-weight: bold;
-        }
-
-        .status-activo { background-color: var(--color-success); }
-        .status-inactivo { background-color: var(--color-error); }
-        .status-licencia { background-color: var(--color-secondary); }
-
-        .btn-detalle {
-            background-color: var(--color-secondary);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 5px;
-            border: none;
-            cursor: pointer;
-        }
-
-        #loading-message {
-            text-align: center;
-            padding: 20px;
-            font-size: 1.1em;
-        }
-    </style>
-</head>
-<body>
-
-    <div class="admin-container">
-
-        <button class="theme-toggle" id="theme-toggle" title="Cambiar Tema">
-            <i class="fas fa-moon"></i>
-        </button>
-
-        <div class="header-utility">
-            <h1>Panel Administrativo - Línea de Transporte</h1>
-            <a href="../../backend/logout.php" class="logout-btn">
-                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
-            </a>
+<div class="animate-fade-in">
+    <div style="margin-bottom: 40px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h1 style="font-size: 2.5rem; margin-bottom: 8px;">Gestión de Choferes</h1>
+            <p style="color: var(--text-muted);">Administra y valida el personal de tu línea de transporte.</p>
         </div>
-
-        <div class="tabs">
-            <button class="tab-btn" onclick="window.location.href='dashboard-admin.php'">Dashboard</button>
-            <button class="tab-btn active">Choferes</button>
-            <button class="tab-btn" onclick="window.location.href='reportes.php'">Reportes</button>
-        </div>
-
-        <div class="gestion-choferes-box">
-            <h2>Gestión de Choferes</h2>
-
-            <div id="loading-message">
-                <i class="fas fa-spinner fa-spin"></i> Cargando datos de choferes...
+        <div style="display: flex; gap: 12px;">
+            <div class="glass-card" style="padding: 10px 20px; border-left: 4px solid var(--warning);">
+                <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700;">POR VALIDAR</span>
+                <div id="count-pending" style="font-size: 1.2rem; font-weight: 800;">0</div>
             </div>
-
-            <table class="choferes-table" id="choferes-table" style="display: none;">
-                <thead>
-                    <tr>
-                        <th>Chofer</th>
-                        <th>Vehículo</th>
-                        <th>Estado</th>
-                        <th>Boletos Hoy</th>
-                        <th>Monto a Canjear</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="choferes-table-body"></tbody>
-            </table>
+            <div class="glass-card" style="padding: 10px 20px; border-left: 4px solid var(--accent);">
+                <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700;">TOTAL</span>
+                <div id="count-total" style="font-size: 1.2rem; font-weight: 800;">0</div>
+            </div>
         </div>
-
     </div>
 
-    <script>
-        const API_CHOFERES = '../../backend/fetch_choferes_data.php';
-        const LINEA_ID = <?php echo $linea_id_sesion; ?>;
+    <!-- Tabla de Choferes -->
+    <div class="card" style="padding: 0; overflow: hidden;">
+        <div style="padding: 24px; border-bottom: 1px solid var(--bg-main); background: rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-size: 1.1rem;"><i class="fas fa-list-ul"></i> Lista de Personal</h3>
+            <div style="display: flex; gap: 8px;">
+                <span class="status-tag status-activo" style="font-size: 0.6rem;">ACTIVO</span>
+                <span class="status-tag status-inactivo" style="font-size: 0.6rem;">INACTIVO</span>
+                <span class="status-tag status-pending" style="background: var(--warning); font-size: 0.6rem;">PENDIENTE</span>
+            </div>
+        </div>
+        
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                <thead>
+                    <tr style="background: var(--bg-main); color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">
+                        <th style="padding: 16px 24px;">Nombre y Contacto</th>
+                        <th style="padding: 16px 24px;">Vehículo / Licencia</th>
+                        <th style="padding: 16px 24px;">Estado</th>
+                        <th style="padding: 16px 24px;">Actividad Hoy</th>
+                        <th style="padding: 16px 24px; text-align: right;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="choferes-table-body">
+                    <tr>
+                        <td colspan="5" style="padding: 40px; text-align: center; color: var(--text-muted);">
+                            <i class="fas fa-spinner fa-spin"></i> Cargando personal...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-        async function fetchChoferesData() {
-            const loading = document.getElementById("loading-message");
-            const table = document.getElementById("choferes-table");
-            const body = document.getElementById("choferes-table-body");
+<style>
+    .status-tag {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: white;
+    }
+    .status-activo { background: var(--accent); }
+    .status-inactivo { background: var(--text-muted); }
+    .status-licencia { background: var(--secondary); }
+    .status-pending { background: var(--warning); color: #000; }
+    .status-rechazado { background: var(--danger); }
+    
+    .action-btn {
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+        background: white;
+        cursor: pointer;
+        transition: var(--transition);
+        color: var(--text-main);
+    }
+    .action-btn:hover {
+        background: var(--bg-main);
+        color: var(--secondary);
+        border-color: var(--secondary);
+    }
+    .btn-approve {
+        background: var(--accent);
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-weight: 700;
+        font-size: 0.75rem;
+        cursor: pointer;
+    }
+</style>
 
-            loading.style.display = "block";
-            table.style.display = "none";
-            body.innerHTML = "";
+<script>
+    const LINEA_ID = <?php echo $linea_id_sesion; ?>;
+    const API_CHOFERES = '../../backend/fetch_choferes_data.php';
 
-            try {
-                const res = await fetch(`${API_CHOFERES}?linea_id=${LINEA_ID}`);
-
-                if (!res.ok) throw new Error("Error en la API");
-
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                renderChoferesTable(data.choferes);
-
-            } catch (err) {
-                loading.innerHTML = `<i class="fas fa-times-circle"></i> Error: ${err.message}`;
-            } finally {
-                loading.style.display = "none";
-                table.style.display = body.children.length > 0 ? "table" : "none";
+    async function loadChoferes() {
+        try {
+            const response = await fetch(`${API_CHOFERES}?linea_id=${LINEA_ID}`);
+            const result = await response.json();
+            if (result.success) {
+                renderChoferes(result.choferes);
             }
+        } catch (err) {
+            console.error(err);
         }
+    }
 
-        function renderChoferesTable(choferes) {
-            const body = document.getElementById("choferes-table-body");
+    function renderChoferes(choferes) {
+        const body = document.getElementById('choferes-table-body');
+        body.innerHTML = '';
+        
+        let pending = 0;
+        document.getElementById('count-total').textContent = choferes.length;
 
-            if (choferes.length === 0) {
-                body.innerHTML = `<tr><td colspan="6" style="text-align:center;">No hay choferes registrados.</td></tr>`;
-                return;
-            }
-
-            choferes.forEach(c => {
-                let estado = (c.estado_servicio || "INACTIVO").toUpperCase();
-                let clase =
-                    estado === "ACTIVO" ? "status-activo" :
-                    estado === "LICENCIA" ? "status-licencia" : "status-inactivo";
-
-                body.innerHTML += `
-                <tr>
-                    <td>${c.nombre_completo}</td>
-                    <td>${c.vehiculo_placa || "N/A"}</td>
-                    <td><span class="status-tag ${clase}">${estado}</span></td>
-                    <td>${c.boletos_cobrados_hoy || 0}</td>
-                    <td>${parseFloat(c.monto_a_canjear || 0).toFixed(2)} Bs</td>
-                    <td><button class="btn-detalle">Ver Detalle</button></td>
-                </tr>`;
-            });
-        }
-
-        document.addEventListener("DOMContentLoaded", fetchChoferesData);
-
-        // 🌙 TEMA OSCURO - COMPLETO
-        const themeBtn = document.getElementById("theme-toggle");
-        const root = document.documentElement;
-
-        const savedTheme = localStorage.getItem("tema") || "light";
-        root.setAttribute("data-theme", savedTheme);
-        updateIcon(savedTheme);
-
-        themeBtn.addEventListener("click", () => {
-            const current = root.getAttribute("data-theme");
-            const newTheme = current === "light" ? "dark" : "light";
-
-            root.setAttribute("data-theme", newTheme);
-            localStorage.setItem("tema", newTheme);
-
-            updateIcon(newTheme);
+        choferes.forEach(c => {
+            if (c.estado_servicio === 'PENDIENTE') pending++;
+            
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--bg-main)';
+            tr.style.transition = 'var(--transition)';
+            
+            let statusClass = 'status-' + (c.estado_servicio || 'inactivo').toLowerCase();
+            
+            tr.innerHTML = `
+                <td style="padding: 20px 24px;">
+                    <div style="font-weight: 700;">${c.nombre_completo}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">${c.email}</div>
+                </td>
+                <td style="padding: 20px 24px;">
+                    <div style="font-family: monospace; font-weight: 700; color: var(--secondary);">${c.vehiculo_placa}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Lic: ${c.licencia}</div>
+                </td>
+                <td style="padding: 20px 24px;">
+                    <span class="status-tag ${statusClass}">${c.estado_servicio}</span>
+                </td>
+                <td style="padding: 20px 24px;">
+                    <div style="font-weight: 700;">${c.boletos_hoy} validados</div>
+                    <div style="font-size: 0.75rem; color: var(--accent); font-weight: 600;">Bs. ${parseFloat(c.total_recaudado).toFixed(2)} total</div>
+                </td>
+                <td style="padding: 20px 24px; text-align: right;">
+                    ${c.estado_servicio === 'PENDIENTE' ? `
+                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                            <button class="btn-approve" onclick="updateStatus(${c.chofer_id}, 'ACTIVO')">VALIDAR</button>
+                            <button class="btn-approve" style="background: var(--danger);" onclick="updateStatus(${c.chofer_id}, 'RECHAZADO')">RECHAZAR</button>
+                        </div>
+                    ` : `
+                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                            <button class="action-btn" title="Editar Estado" onclick="promptStatus(${c.chofer_id})">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                            <button class="action-btn" title="Ver Historial">
+                                <i class="fas fa-history"></i>
+                            </button>
+                        </div>
+                    `}
+                </td>
+            `;
+            body.appendChild(tr);
         });
+        
+        document.getElementById('count-pending').textContent = pending;
+    }
 
-        function updateIcon(theme) {
-            const icon = themeBtn.querySelector("i");
-            icon.classList.toggle("fa-sun", theme === "dark");
-            icon.classList.toggle("fa-moon", theme === "light");
+    async function updateStatus(id, status) {
+        if (!confirm(`¿Confirmas cambiar el estado del chofer a ${status}?`)) return;
+        
+        try {
+            const formData = new FormData();
+            formData.append('chofer_id', id);
+            formData.append('estado', status);
+            
+            const response = await fetch('../../backend/update_chofer_status.php', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            alert(result.message);
+            if (result.success) loadChoferes();
+        } catch (err) {
+            alert('Error al actualizar estado');
         }
-    </script>
+    }
 
-</body>
-</html>
+    function promptStatus(id) {
+        const newStatus = prompt("Cambiar estado a: (ACTIVO, INACTIVO, LICENCIA)");
+        if (newStatus && ['ACTIVO', 'INACTIVO', 'LICENCIA'].includes(newStatus.toUpperCase())) {
+            updateStatus(id, newStatus.toUpperCase());
+        }
+    }
+
+    loadChoferes();
+</script>
+
+<?php include '../includes/footer.php'; ?>

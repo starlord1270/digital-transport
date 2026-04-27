@@ -1,94 +1,52 @@
 <?php
-// backend/fetch-perfil-pasajero.php
-// 🛑 LÍNEAS TEMPORALES PARA DIAGNÓSTICO
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-// 🛑 FIN LÍNEAS TEMPORALES
+/**
+ * DIGITAL TRANSPORT - FETCH PERFIL (REFACTORIZADA)
+ */
 header('Content-Type: application/json');
-session_start();
+require_once 'includes/db.php';
 
-$response = ['success' => false, 'message' => ''];
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-// 1. Incluir la conexión MySQLi (¡Usando el nombre correcto: bd.php!)
-require_once 'bd.php'; 
-
-// Si la conexión falla, el script se detiene en bd.php, por lo que no necesitamos un if aquí.
-
-// 2. Verificación de Sesión y Rol (Pasajero)
-// Basado en tu lógica de login, los tipos 1, 2, 5, 6 son pasajeros.
-$allowed_pasajero_types = [1, 2, 5, 6]; 
-$tipo_usuario_id = $_SESSION['tipo_usuario_id'] ?? 0;
-
-if (!isset($_SESSION['usuario_id']) || !in_array($tipo_usuario_id, $allowed_pasajero_types)) {
-    // Si la sesión no está establecida o el rol no es de pasajero
-    $response['message'] = 'Acceso denegado o sesión no válida.';
-    // ⚠️ Importante: Si esto ocurre, el frontend debe redirigir al login.
-    echo json_encode($response);
+if (!isset($_SESSION['usuario_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Sesión no válida.']);
     exit;
 }
 
-$usuario_id = $_SESSION['usuario_id'];
+$user_id = $_SESSION['usuario_id'];
 
-// 3. Consulta para obtener datos de USUARIO, SALDO y CÓDIGO de Tarjeta
-$sql = "
-    SELECT
-        U.nombre_completo,
-        U.documento_identidad,
-        U.email,
-        U.saldo,
-        U.fecha_registro,
-        T.codigo_seguridad
-    FROM
-        USUARIO U
-    LEFT JOIN
-        TARJETA T ON U.usuario_id = T.usuario_id
-    WHERE
-        U.usuario_id = ?
-";
+try {
+    $sql = "
+        SELECT nombre_completo, documento_identidad, email, saldo, fecha_registro, tipo_usuario_id
+        FROM USUARIO 
+        WHERE usuario_id = ?
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$user_id]);
+    $data = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// 🛑 USANDO MySQLi con $conn (tu objeto de conexión)
-$stmt = $conn->prepare($sql);
+    if ($data) {
+        $roles = [1 => "Estándar", 2 => "Estudiante", 5 => "Adulto", 6 => "Adulto Mayor"];
+        $tipo_pasajero = $roles[$data['tipo_usuario_id']] ?? "Usuario";
+        
+        $fecha_registro = new DateTime($data['fecha_registro']);
 
-if (!$stmt) {
-    $response['message'] = 'Error de preparación de consulta: ' . $conn->error;
-    $conn->close();
-    echo json_encode($response);
-    exit;
-}
-
-$stmt->bind_param("i", $usuario_id);
-$stmt->execute();
-$result = $stmt->get_result();
-$data = $result->fetch_assoc();
-$stmt->close();
-$conn->close(); // Cerrar la conexión
-
-if ($data) {
-    // 4. Determinar Tipo de Pasajero para la etiqueta de la vista
-    $tipo_pasajero = "Estándar";
-    if ($tipo_usuario_id == 2) { 
-        $tipo_pasajero = "Estudiante"; 
-    } elseif ($tipo_usuario_id == 6) { 
-        $tipo_pasajero = "Adulto Mayor"; 
+        echo json_encode([
+            'success' => true,
+            'data' => [
+                'nombre_completo' => $data['nombre_completo'],
+                'documento_identidad' => $data['documento_identidad'],
+                'email' => $data['email'],
+                'saldo' => number_format($data['saldo'], 2, '.', ''),
+                'miembro_desde' => $fecha_registro->format('M Y'),
+                'tipo_pasajero' => $tipo_pasajero
+            ]
+        ]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Usuario no encontrado.']);
     }
-    
-    $fecha_registro = new DateTime($data['fecha_registro']);
-    $miembro_desde = $fecha_registro->format('F Y');
-
-    // 5. Preparar respuesta
-    $response['success'] = true;
-    $response['data'] = [
-        'nombre_completo' => $data['nombre_completo'],
-        'documento_identidad' => $data['documento_identidad'],
-        'email' => $data['email'],
-        'saldo' => number_format($data['saldo'], 2, '.', ''),
-        'miembro_desde' => $miembro_desde,
-        'tipo_pasajero' => $tipo_pasajero,
-        'codigo_qr' => $data['codigo_seguridad'] ?? 'NO_TARJETA'
-    ];
-} else {
-    $response['message'] = 'No se encontraron datos de pasajero para este usuario.';
+} catch (PDOException $e) {
+    echo json_encode(['success' => false, 'message' => 'Error de BD: ' . $e->getMessage()]);
 }
-
-echo json_encode($response);
 ?>

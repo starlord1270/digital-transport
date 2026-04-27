@@ -7,9 +7,14 @@
 - [x] Refactorización de la Interfaz de Usuario (UI)
     - [x] Crear `includes/header.php`
     - [x] Crear `includes/footer.php`
-    - [x] Actualizar `index.php` con el nuevo diseño
-- [ ] Mejoras de Funcionalidades
-    - [/] Mejorar la UI/UX del "Pase Digital"
+    - [x] Implementar Portal Principal (Landing Page) en `index.php`
+    - [x] Refactorizar todas las vistas del pasajero
+    - [x] Refactorizar el Panel de Cobro del Chofer (`cobro-chofer.php`)
+    - [x] Refactorizar el Panel de Administración de Línea (`dashboard-admin.php`)
+    - [x] Crear página de registro especializada para Choferes (`registro-chofer.php`)
+- [x] Mejoras de Funcionalidades
+    - [x] Mejorar la UI/UX del "Pase Digital"
+    - [x] Migración completa a PDO en el Backend
 - [ ] Verificación
     - [ ] Ejecutar pruebas PHPUnit
     - [ ] Verificación manual de la interfaz

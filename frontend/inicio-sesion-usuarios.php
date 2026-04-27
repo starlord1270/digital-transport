@@ -1,313 +1,130 @@
 <?php
 /**
- * Archivo: inicio-sesion-usuarios.php
- * Descripción: Formulario de inicio de sesión para pasajeros.
+ * DIGITAL TRANSPORT - INICIAR SESIÓN (REFACTORIZADA)
  */
+$page_title = "Iniciar Sesión - Digital Transport";
 
-// 1. GESTIÓN DE SESIONES
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// 🛑 VERIFICACIÓN DE SESIÓN 🛑
-// Si el usuario ya está logueado (tiene un usuario_id en sesión), redirigir a la página de inicio.
 if (isset($_SESSION['usuario_id'])) {
     header("Location: index.php");
     exit();
 }
-// 🛑 FIN VERIFICACIÓN DE SESIÓN 🛑
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Digital Transport - Iniciar Sesión</title>
+    <title><?php echo $page_title; ?></title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
     <style>
-        :root {
-            --color-primary: #0b2e88; /* Azul oscuro principal */
-            --color-secondary: #1e88e5; /* Azul para botones/énfasis */
-            --color-text-dark: #333;
-            --color-background-light: #f4f7f9;
-            --color-input-border: #ccc;
-        }
-
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: var(--color-background-light);
-            min-height: 100vh;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             display: flex;
+            align-items: center;
             justify-content: center;
-            align-items: center;
-        }
-        
-        /* --- Contenedor Principal de Login --- */
-        .login-container {
-            max-width: 400px;
-            width: 90%;
-            background-color: white;
-            padding: 40px 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-        }
-
-        /* --- Header de la Aplicación (Logotipo) --- */
-        .app-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .logo {
-            font-size: 1.8em;
-            font-weight: bold;
-            color: var(--color-primary);
-        }
-        .logo-subtitle {
-            font-size: 0.9em;
-            font-weight: normal;
-            color: #666;
-            display: block;
-            margin-top: 5px;
-        }
-
-        /* --- Título del Formulario --- */
-        .form-title {
-            text-align: center;
-            margin-bottom: 25px;
-        }
-        .form-title h2 {
-            font-size: 1.4em;
-            color: var(--color-text-dark);
+            height: 100vh;
             margin: 0;
         }
-        .form-title p {
-            font-size: 0.9em;
-            color: #999;
-            margin-top: 5px;
-        }
-        
-        /* --- Grupos de Input --- */
-        .input-group {
-            margin-bottom: 20px;
-            position: relative;
-        }
-
-        .input-group label {
-            display: block;
-            font-size: 0.9em;
-            color: var(--color-text-dark);
-            margin-bottom: 5px;
-        }
-
-        .input-group input {
+        .login-card {
             width: 100%;
-            padding: 12px 15px;
-            border: 1px solid var(--color-input-border);
-            border-radius: 5px;
-            font-size: 1em;
-            box-sizing: border-box;
-            background-color: #f9f9f9;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            max-width: 400px;
+            padding: 40px;
+            animation: slideUp 0.6s cubic-bezier(0.23, 1, 0.32, 1);
         }
-        .input-group input:focus {
-            border-color: var(--color-secondary);
-            background-color: white;
-            box-shadow: 0 0 0 1px var(--color-secondary);
-            outline: none;
-        }
-        
-        .input-icon {
-            position: absolute;
-            right: 15px;
-            top: 50%; 
-            /* Ajuste el ícono para que esté centrado con el input */
-            transform: translateY(calc(50% + 5px)); 
-            color: #999;
-        }
-
-        /* --- Opciones Adicionales --- */
-        .options-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 25px;
-            font-size: 0.9em;
-        }
-        
-        .forgot-password {
-            color: var(--color-secondary);
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-        .forgot-password:hover {
-            color: var(--color-primary);
-        }
-
-        /* --- Botón de Iniciar Sesión --- */
-        .btn-login {
-            width: 100%;
-            background-color: var(--color-primary);
-            color: white;
-            border: none;
-            padding: 12px 0;
-            border-radius: 5px;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .btn-login:hover {
-            background-color: #082266;
-        }
-
-        /* --- Enlace de Registro --- */
-        .register-link {
-            text-align: center;
-            margin-top: 25px;
-            font-size: 0.9em;
-            color: #666;
-        }
-        .register-link a {
-            color: var(--color-secondary);
-            text-decoration: none;
-            font-weight: 600;
-        }
-        
-        /* --- Mensaje de Alerta JS --- */
-        #message-area {
-            padding: 10px;
-            margin-bottom: 15px;
-            border-radius: 5px;
-            font-size: 0.9em;
-            display: none; /* Oculto por defecto */
-            text-align: center;
-        }
-        .alert-error {
-            background-color: #fdeaea;
-            color: #d9534f;
-            border: 1px solid #d9534f;
-        }
-        .alert-success {
-            background-color: #e6ffe6;
-            color: #4caf50;
-            border: 1px solid #4caf50;
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
 <body>
 
-    <div class="login-container">
-        
-        <header class="app-header">
-            <div class="logo">
-                Digital Transport
-                <span class="logo-subtitle">Sistema de Boletos Digital</span>
-            </div>
-        </header>
-
-        <div class="form-title">
-            <h2>Acceso de Usuarios</h2>
-            <p>Ingresa tus credenciales para continuar</p>
+<div class="card login-card glass-card">
+    <div style="text-align: center; margin-bottom: 32px;">
+        <div style="width: 64px; height: 64px; background: var(--primary); color: white; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto 16px; box-shadow: var(--shadow-md);">
+            <i class="fas fa-bus"></i>
         </div>
-        
-        <div id="message-area" class="alert-error"></div>
-
-        <form id="loginForm"> 
-            
-            <div class="input-group">
-                <label for="email">Correo Electrónico o ID de Usuario</label>
-                <input type="text" id="email" name="email" placeholder="ejemplo@correo.com o ID" required>
-                <i class="input-icon fas fa-user"></i>
-            </div>
-
-            <div class="input-group">
-                <label for="password">Contraseña</label>
-                <input type="password" id="password" name="password" placeholder="Ingresa tu contraseña" required>
-                <i class="input-icon fas fa-lock"></i>
-            </div>
-            
-            <div class="options-row">
-                <div class="remember-me">
-                    <input type="checkbox" id="remember" name="remember">
-                    <label for="remember">Recordarme</label>
-                </div>
-                <a href="#" class="forgot-password">¿Olvidaste tu Contraseña?</a>
-            </div>
-
-            <button type="submit" class="btn-login">
-                <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
-            </button>
-        </form>
-        
-        <div class="register-link">
-            ¿No tienes cuenta? <a href="registro-usuarios.php">Regístrate aquí</a>
-        </div>
-
+        <h2 style="font-size: 1.8rem; margin-bottom: 8px;">Bienvenido</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Ingresa a tu cuenta de transporte digital</p>
     </div>
-    
-    <script>
-        document.getElementById('loginForm').addEventListener('submit', function(event) {
-            event.preventDefault(); // Evita el envío tradicional del formulario
-            
-            const form = event.target;
-            const messageArea = document.getElementById('message-area');
-            messageArea.style.display = 'none'; // Ocultar mensajes anteriores
 
-            const data = {
-                // El campo 'email' acepta correo o ID de usuario para flexibilidad
-                email: form.email.value, 
-                password: form.password.value
-            };
+    <div id="alert-login" style="display: none; margin-bottom: 24px;"></div>
 
-            // Intentar autenticar al usuario usando el endpoint PHP unificado
-            // Ruta asumida: frontend/../backend/validacion-login.php
-            fetch('../backend/validacion-login.php', {
+    <form id="login-form">
+        <div class="form-group">
+            <label class="form-label">Correo Electrónico</label>
+            <div style="position: relative;">
+                <i class="fas fa-envelope" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+                <input type="email" name="email" class="form-input" style="padding-left: 45px;" placeholder="tu@correo.com" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Contraseña</label>
+            <div style="position: relative;">
+                <i class="fas fa-lock" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+                <input type="password" name="password" class="form-input" style="padding-left: 45px;" placeholder="••••••••" required>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; font-size: 0.85rem;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" name="remember"> Recordarme
+            </label>
+            <a href="#" style="color: var(--secondary); text-decoration: none; font-weight: 500;">¿Olvidaste tu contraseña?</a>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 1.1rem;">
+            Iniciar Sesión <i class="fas fa-sign-in-alt" style="margin-left: 8px;"></i>
+        </button>
+    </form>
+
+    <div style="text-align: center; margin-top: 32px; font-size: 0.9rem; color: var(--text-muted);">
+        ¿No tienes una cuenta? <a href="registro-usuarios.php" style="color: var(--secondary); font-weight: 700; text-decoration: none;">Regístrate ahora</a>
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById('login-form');
+    const alertBox = document.getElementById('alert-login');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        
+        try {
+            const response = await fetch('../backend/validacion-login.php', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data),
-            })
-            .then(response => {
-                // Si la respuesta no es OK (ej. 500 Server Error), lanzar error
-                if (!response.ok) {
-                    throw new Error('Error de red o servidor.');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    // Muestra mensaje de éxito temporal
-                    messageArea.textContent = data.message;
-                    messageArea.classList.remove('alert-error');
-                    messageArea.classList.add('alert-success');
-                    messageArea.style.display = 'block';
-
-                    // Redirección. Si el backend proporciona una URL de redirección (por ejemplo, después de intentar acceder a una página restringida), úsala. De lo contrario, ir a 'index.php'.
-                    setTimeout(() => {
-                         window.location.href = data.redirect_to || 'index.php';
-                    }, 500); // Pequeña pausa para que el usuario vea el mensaje
-
-                } else {
-                    // Muestra el error de credenciales devuelto por PHP
-                    messageArea.textContent = data.error || 'Credenciales no válidas.';
-                    messageArea.classList.remove('alert-success');
-                    messageArea.classList.add('alert-error');
-                    messageArea.style.display = 'block';
-                }
-            })
-            .catch(error => {
-                // Error de conexión o JSON mal formado
-                console.error('Error en la solicitud Fetch:', error);
-                messageArea.textContent = 'Error de conexión con el servidor. Revise la consola.';
-                messageArea.classList.remove('alert-success');
-                messageArea.classList.add('alert-error');
-                messageArea.style.display = 'block';
+                body: formData
             });
-        });
-    </script>
+            const result = await response.json();
+            
+            if (result.success) {
+                showAlert(result.message, 'success');
+                setTimeout(() => window.location.href = result.redirect, 1000);
+            } else {
+                showAlert(result.message, 'danger');
+            }
+        } catch (err) {
+            showAlert('Error de conexión.', 'danger');
+        }
+    });
+
+    function showAlert(msg, type) {
+        alertBox.style.display = 'block';
+        alertBox.innerHTML = `
+            <div class="glass-card" style="padding: 12px; border-color: var(--${type}); color: var(--${type}); font-size: 0.85rem; background: rgba(0,0,0,0.01);">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${msg}
+            </div>
+        `;
+    }
+</script>
 
 </body>
 </html>

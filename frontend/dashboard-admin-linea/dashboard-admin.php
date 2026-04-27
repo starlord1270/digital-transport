@@ -1,426 +1,270 @@
-<?php 
-// 1. ASEGURAR SESIÓN INICIADA (Debe ser lo primero)
-if (session_status() == PHP_SESSION_NONE) {
+<?php
+/**
+ * DIGITAL TRANSPORT - DASHBOARD ADMINISTRADOR DE LÍNEA (PREMIUM)
+ */
+$page_title = "Panel Administrativo - Digital Transport";
+$active_page = "dashboard";
+
+if (session_status() === PHP_SESSION_NONE) {
     session_start();
-} 
+}
 
-// 🛑 INICIO DE VERIFICACIÓN DE SEGURIDAD Y ROL (RBAC) 🛑
-
-// Tipo de usuario esperado para esta página: 4 (ADMIN_LINEA)
-$user_type_expected = 4;
-$user_type_actual = isset($_SESSION['tipo_usuario_id']) ? $_SESSION['tipo_usuario_id'] : 0;
-$linea_id_sesion = isset($_SESSION['linea_id']) ? $_SESSION['linea_id'] : 0; 
-
-// Si el usuario no está logueado, O el tipo de usuario no es 4, O no tiene linea_id asignado, redirigir.
-if ($user_type_actual != $user_type_expected || $linea_id_sesion == 0) {
-    // Limpiar y destruir la sesión actual para evitar conflictos futuros
-    session_unset();
-    session_destroy();
-    
-    // Redirigir al inicio de sesión (ruta corregida)
-    $login_url = '/Competencia-Analisis/digital-transport/frontend/inicio-sesion-lineas-choferes/login.php';
-    header("Location: " . $login_url . "?error=acceso_denegado");
+// Verificación de Seguridad y Rol (RBAC)
+if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo_usuario_id'] != 4 || !isset($_SESSION['linea_id'])) {
+    header("Location: ../inicio-sesion-usuarios.php?error=acceso_denegado");
     exit;
 }
 
-// 🛑 FIN DE VERIFICACIÓN DE SEGURIDAD Y ROL 🛑
+$linea_id_sesion = $_SESSION['linea_id'];
+
+include '../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel Administrativo - Digital Transport</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style>
-        /* [Se mantienen los estilos CSS para no repetirlos. Solo se añade el estilo del nuevo botón.] */
 
-        :root {
-            --color-primary: #0b2e88;
-            --color-secondary: #1e88e5;
-            --color-success: #4caf50;
-            --color-error: #f44336;
-            --color-text-dark: #333;
-            --color-background-light: #f4f7f9;
-            --color-card-bg: #fff;
-            --color-border: #e0e0e0;
-            
-            --bg-primary: #ffffff;
-            --bg-secondary: #f4f7f9;
-            --text-primary: #333;
-        }
-
-        [data-theme="dark"] {
-            --color-background-light: #1a1a1a;
-            --bg-primary: #1e1e1e;
-            --bg-secondary: #2a2a2a;
-            --text-primary: #e0e0e0;
-            --color-card-bg: #2a2a2a;
-            --color-border: #404040;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-secondary);
-            color: var(--text-primary);
-            transition: background-color 0.3s, color 0.3s;
-        }
-
-        .admin-container {
-            width: 90%;
-            max-width: 1200px;
-            margin: 20px auto;
-            padding: 20px;
-            background-color: var(--color-card-bg);
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        /* --- Estilos del Encabezado --- */
-        .header-utility {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid var(--color-border);
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-        }
-        .header-utility h1 {
-            color: var(--color-primary);
-            margin: 0;
-            border-bottom: none;
-            padding-bottom: 0;
-        }
-
-        /* --- Contenedor de Botones (Perfil y Logout) --- */
-        .header-actions {
-            display: flex; /* Permite alinear ambos botones horizontalmente */
-            gap: 10px;
-        }
-
-        /* Estilo base para ambos botones de utilidad */
-        .utility-btn {
-            text-decoration: none;
-            font-weight: 600;
-            padding: 8px 15px;
-            border-radius: 4px;
-            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
-            white-space: nowrap;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        /* Estilo específico para el botón de PERFIL */
-        .profile-btn {
-            color: var(--color-primary);
-            border: 1px solid var(--color-primary);
-            background-color: transparent;
-        }
-        .profile-btn:hover {
-            background-color: var(--color-primary);
-            color: var(--color-card-bg);
-        }
-
-        /* Estilo específico para el botón de LOGOUT */
-        .logout-btn {
-            color: var(--color-error);
-            border: 1px solid var(--color-error);
-        }
-        .logout-btn:hover {
-            background-color: var(--color-error);
-            color: var(--color-card-bg);
-        }
-        
-        /* --- Tabs de Navegación --- */
-        .tabs {
-            display: flex;
-            border-bottom: 1px solid var(--color-border);
-            margin-bottom: 20px;
-        }
-        .tab-btn {
-            padding: 10px 20px;
-            cursor: pointer;
-            border: none;
-            background: none;
-            font-size: 1em;
-            font-weight: 600;
-            color: var(--color-text-dark);
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }
-        .tab-btn.active {
-            color: var(--color-primary);
-            border-bottom: 3px solid var(--color-primary);
-        }
-
-        /* --- Tarjetas de Resumen --- */
-        .summary-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .card {
-            background-color: var(--color-card-bg);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            border: 1px solid var(--color-border);
-        }
-        .card h3 {
-            margin-top: 0;
-            font-size: 1.1em;
-            color: #777;
-        }
-        .card .value {
-            font-size: 2.2em;
-            font-weight: bold;
-            color: var(--color-primary);
-            margin-top: 5px;
-        }
-        .card.active-choferes .value {
-            color: var(--color-success);
-        }
-
-        /* --- Resumen Inferior (Choferes y Validaciones) --- */
-        .dashboard-sections {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        .section-box {
-            background-color: var(--color-card-bg);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            border: 1px solid var(--color-border);
-        }
-        .section-box h3 {
-            border-bottom: 1px solid var(--color-border);
-            padding-bottom: 10px;
-            margin-top: 0;
-        }
-
-        /* --- Lista de Resumen de Choferes --- */
-        .chofer-list-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px dashed var(--color-border);
-            font-size: 0.9em;
-        }
-        .chofer-list-item:last-child {
-            border-bottom: none;
-        }
-        .chofer-info {
-            font-weight: 600;
-        }
-        .chofer-stats span {
-            display: block;
-            text-align: right;
-            font-size: 0.9em;
-        }
-        .chofer-stats .monto {
-            color: var(--color-error); /* Para destacar el monto pendiente de canje */
-            font-weight: bold;
-        }
-        
-        /* --- Lista de Validaciones --- */
-        .validation-list-item {
-            padding: 8px 0;
-            border-bottom: 1px dashed var(--color-border);
-            font-size: 0.9em;
-        }
-        .validation-list-item:last-child {
-            border-bottom: none;
-        }
-        .validation-name {
-            font-weight: 600;
-            color: var(--color-secondary);
-        }
-        .validation-details {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 3px;
-            color: #777;
-        }
-    </style>
-</head>
-<body>
-
-    <div class="admin-container">
-        
-        <div class="header-utility">
-            <h1>Panel Administrativo - Línea de Transporte</h1>
-            <div class="header-actions">
-                <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
-                    <i class="fas fa-moon"></i>
-                </button>
-                <a href="perfil-admin.php" class="profile-btn utility-btn">>
-                    <i class="fas fa-user"></i> Perfil
-                </a>
-                <a href="../../backend/logout.php" class="logout-btn utility-btn">
-                    <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
-                </a>
-            </div>
-            </div>
-        <div class="tabs">
-            <button class="tab-btn active">Dashboard</button>
-            <button class="tab-btn" onclick="window.location.href='choferes.php'">Choferes</button>
-            <button class="tab-btn" onclick="window.location.href='reportes.php'">Reportes</button>
+<div class="animate-fade-in">
+    <!-- Header con Resumen Rápido -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px;">
+        <div>
+            <h1 style="font-size: 2.5rem; margin-bottom: 8px;">Panel de Control</h1>
+            <p style="color: var(--text-muted);">Bienvenido al centro de gestión de tu línea de transporte.</p>
         </div>
-
-        <div class="summary-cards">
-            <div class="card">
-                <h3>Total Recaudado Hoy</h3>
-                <div class="value" id="total-recaudado">0.00 Bs</div>
+        <div style="display: flex; gap: 16px;">
+            <div class="glass-card" style="padding: 12px 24px; text-align: center; border-bottom: 4px solid var(--secondary);">
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">Choferes Activos</span>
+                <div id="choferes-activos" style="font-size: 1.5rem; font-weight: 800; color: var(--secondary);">0</div>
             </div>
-            <div class="card">
-                <h3>Boletos Pendientes de Canje</h3>
-                <div class="value" id="boletos-pendientes">0</div>
-                <small class="text-muted">Boletos por canjear con choferes</small>
+            <div class="glass-card" style="padding: 12px 24px; text-align: center; border-bottom: 4px solid var(--accent);">
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">Recaudación Hoy</span>
+                <div id="total-recaudado" style="font-size: 1.5rem; font-weight: 800; color: var(--accent);">Bs. 0.00</div>
             </div>
-            <div class="card active-choferes">
-                <h3>Choferes Activos</h3>
-                <div class="value" id="choferes-activos">0</div>
-                <small class="text-muted">Choferes en servicio hoy</small>
+            <div id="alert-pendientes" class="glass-card" style="padding: 12px 24px; text-align: center; border-bottom: 4px solid var(--danger); display: none; cursor: pointer;" onclick="window.location.href='choferes.php'">
+                <span style="font-size: 0.75rem; color: var(--danger); text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">Por Validar</span>
+                <div id="choferes-pendientes-val" style="font-size: 1.5rem; font-weight: 800; color: var(--danger);">0</div>
+            </div>
+            <div id="alert-canjes" class="glass-card" style="padding: 12px 24px; text-align: center; border-bottom: 4px solid var(--warning); display: none;">
+                <span style="font-size: 0.75rem; color: #856404; text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">Canjes Pendientes</span>
+                <div id="canjes-count-badge" style="font-size: 1.5rem; font-weight: 800; color: #856404;">0</div>
             </div>
         </div>
-        
-        <div class="dashboard-sections">
-            
-            <div class="section-box">
-                <h3>Resumen de Choferes</h3>
-                <div id="resumen-choferes">
-                    <p style="text-align: center; color: #777;">Cargando datos...</p>
-                </div>
-            </div>
-
-            <div class="section-box">
-                <h3>Validaciones Pendientes</h3>
-                <div id="validaciones-pendientes">
-                     <p style="text-align: center; color: #777;">No hay validaciones pendientes.</p>
-                </div>
-            </div>
-            
-        </div>
-        
     </div>
 
-    <script>
-        const API_DASHBOARD = '../../backend/fetch_dashboard_data.php'; 
-        // Obtener el ID de la línea del administrador desde PHP
-        const LINEA_ID = <?php echo $linea_id_sesion; ?>; 
-
-        async function fetchDashboardData() {
-            // Chequeo de seguridad en JS
-            if (LINEA_ID === 0) {
-                 console.error("Error de Sesión: No se encontró LINEA_ID. La verificación PHP debería haber redirigido.");
-                 return;
-            }
-
-            try {
-                // Se envía el ID de la línea del administrador logueado
-                const response = await fetch(`${API_DASHBOARD}?linea_id=${LINEA_ID}`);
-                
-                // Manejo de errores HTTP (404, 500, etc.)
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Error en la API (${response.status}). Respuesta: ${errorText.substring(0, 100)}...`);
-                }
-                
-                const data = await response.json();
-
-                if (!data.success) {
-                    throw new Error(data.error || "No se pudieron cargar los datos del dashboard.");
-                }
-
-                renderData(data.data);
-                
-            } catch (error) {
-                console.error("Error al cargar el dashboard:", error);
-                // Aquí podrías mostrar un mensaje de error en la interfaz
-            }
-        }
-
-        function renderData(data) {
-            // 1. Tarjetas Superiores
-            document.getElementById('total-recaudado').textContent = `${parseFloat(data.total_recaudado).toFixed(2)} Bs`;
-            document.getElementById('boletos-pendientes').textContent = data.boletos_pendientes;
-            document.getElementById('choferes-activos').textContent = data.choferes_activos;
-
-            // 2. Resumen de Choferes
-            const resumenChoferesDiv = document.getElementById('resumen-choferes');
-            resumenChoferesDiv.innerHTML = ''; // Limpiar
-            if (data.resumen_choferes && data.resumen_choferes.length > 0) {
-                data.resumen_choferes.forEach(chofer => {
-                    const item = document.createElement('div');
-                    item.className = 'chofer-list-item';
-                    item.innerHTML = `
-                        <div class="chofer-info">${chofer.nombre_completo}</div>
-                        <div class="chofer-stats">
-                            <span>${chofer.boletos_cobrados} boletos</span>
-                            <span class="monto">${parseFloat(chofer.monto_canje).toFixed(2)} Bs</span>
-                        </div>
-                    `;
-                    resumenChoferesDiv.appendChild(item);
-                });
-            } else {
-                resumenChoferesDiv.innerHTML = '<p style="text-align: center; color: #777;">No hay choferes con actividad hoy.</p>';
-            }
-
-            // 3. Validaciones Pendientes
-            const validacionesDiv = document.getElementById('validaciones-pendientes');
-            validacionesDiv.innerHTML = ''; // Limpiar
-            if (data.validaciones_pendientes && data.validaciones_pendientes.length > 0) {
-                data.validaciones_pendientes.forEach(val => {
-                    const item = document.createElement('div');
-                    item.className = 'validation-list-item';
-                    item.innerHTML = `
-                        <div class="validation-name">${val.nombre_completo}</div>
-                        <div class="validation-details">
-                            <span>${val.tipo_descuento}</span>
-                            <span>${val.fecha_solicitud}</span>
-                        </div>
-                    `;
-                    validacionesDiv.appendChild(item);
-                });
-            } else {
-                 validacionesDiv.innerHTML = '<p style="text-align: center; color: #777;">No hay validaciones pendientes.</p>';
-            }
-        }
-
-        // Cargar datos al iniciar
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchDashboardData();
+    <!-- Grid Principal -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start;">
         
-            // TEMA OSCURO
-            const themeToggle = document.getElementById('theme-toggle');
-            const htmlElement = document.documentElement;
-            const themeIcon = themeToggle.querySelector('i');
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            htmlElement.setAttribute('data-theme', savedTheme);
-            updateThemeIcon(savedTheme);
-            themeToggle.addEventListener('click', () => {
-                const currentTheme = htmlElement.getAttribute('data-theme');
-                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                htmlElement.setAttribute('data-theme', newTheme);
-                localStorage.setItem('theme', newTheme);
-                updateThemeIcon(newTheme);
-            });
-            function updateThemeIcon(theme) {
-                if (theme === 'dark') {
-                    themeIcon.classList.remove('fa-moon');
-                    themeIcon.classList.add('fa-sun');
-                } else {
-                    themeIcon.classList.remove('fa-sun');
-                    themeIcon.classList.add('fa-moon');
-                }
+        <!-- Sección Izquierda: Resumen de Choferes -->
+        <div class="card" style="padding: 32px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid var(--bg-main);">
+                <h3 style="display: flex; align-items: center; gap: 12px;"><i class="fas fa-users" style="color: var(--primary);"></i> Actividad de Choferes</h3>
+                <a href="choferes.php" style="font-size: 0.8rem; color: var(--secondary); text-decoration: none; font-weight: 600;">Ver todos <i class="fas fa-arrow-right"></i></a>
+            </div>
+            
+            <div id="resumen-choferes" style="display: grid; gap: 12px;">
+                <p style="text-align: center; color: var(--text-muted); padding: 20px;">Cargando datos...</p>
+            </div>
+        </div>
+
+        <!-- Sección Derecha: Validaciones Especiales -->
+        <div style="display: grid; gap: 32px;">
+            <div class="glass-card" style="padding: 32px; background: rgba(255,255,255,0.02);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h3 style="display: flex; align-items: center; gap: 12px;"><i class="fas fa-id-card-alt" style="color: var(--warning);"></i> Validación de Pasajeros (Tarifa Especial)</h3>
+                    <div id="count-pendientes" style="background: var(--danger); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 800;">0</div>
+                </div>
+                
+                <!-- Contenedor para el listado de validaciones -->
+                <div id="validaciones-pendientes" style="display: grid; gap: 12px; margin-bottom: 20px;">
+                    <p style="text-align: center; color: var(--text-muted); padding: 10px;">Cargando...</p>
+                </div>
+                
+                <button class="btn btn-secondary" style="width: 100%; margin-top: 24px; font-size: 0.8rem;" onclick="window.location.href='reportes.php'">
+                    <i class="fas fa-file-invoice-dollar"></i> Generar Reporte de Canje
+                </button>
+            </div>
+
+            <!-- Liquidaciones de Choferes -->
+            <div class="card" style="padding: 32px; border-left: 5px solid var(--secondary);">
+                <h3 style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;"><i class="fas fa-hand-holding-usd" style="color: var(--secondary);"></i> Liquidaciones por Pagar</h3>
+                <div id="lista-canjes" style="display: grid; gap: 12px;">
+                    <p style="text-align: center; color: var(--text-muted); padding: 10px;">No hay liquidaciones solicitadas.</p>
+                </div>
+            </div>
+
+            <!-- Stats Box -->
+            <div class="card" style="padding: 32px; background: var(--primary); color: white;">
+                <h4 style="margin-bottom: 16px;">Recordatorio Semanal</h4>
+                <p style="font-size: 0.85rem; opacity: 0.8; line-height: 1.6;">Recuerda que el cierre administrativo se realiza todos los viernes a las 18:00. Asegúrate de que todos los choferes hayan canjeado sus boletos.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const LINEA_ID = <?php echo $linea_id_sesion; ?>;
+    const API_DASHBOARD = '../../backend/fetch_dashboard_data.php';
+
+    async function loadDashboard() {
+        try {
+            const response = await fetch(`${API_DASHBOARD}?linea_id=${LINEA_ID}`);
+            const result = await response.json();
+            
+            if (result.success) {
+                renderDashboard(result.data);
+            } else {
+                console.error(result.error);
             }
-        });
-    </script>
-</body>
-</html>
+        } catch (err) {
+            console.error("Error cargando dashboard:", err);
+        }
+    }
+
+    function renderDashboard(data) {
+        // Stats Superiores
+        document.getElementById('total-recaudado').textContent = `Bs. ${parseFloat(data.total_recaudado).toFixed(2)}`;
+        document.getElementById('choferes-activos').textContent = data.choferes_activos;
+
+        // Alerta de Choferes Pendientes
+        const alertBox = document.getElementById('alert-pendientes');
+        if (data.choferes_pendientes_count > 0) {
+            alertBox.style.display = 'block';
+            document.getElementById('choferes-pendientes-val').textContent = data.choferes_pendientes_count;
+        } else {
+            alertBox.style.display = 'none';
+        }
+
+        // Alerta de Canjes
+        const canjeAlert = document.getElementById('alert-canjes');
+        if (data.canjes_pendientes_count > 0) {
+            canjeAlert.style.display = 'block';
+            document.getElementById('canjes-count-badge').textContent = data.canjes_pendientes_count;
+        } else {
+            canjeAlert.style.display = 'none';
+        }
+
+        // Lista de Choferes
+        const resumenDiv = document.getElementById('resumen-choferes');
+        resumenDiv.innerHTML = '';
+        if (data.resumen_choferes && data.resumen_choferes.length > 0) {
+            data.resumen_choferes.forEach(c => {
+                const item = document.createElement('div');
+                item.className = 'glass-card';
+                item.style.padding = '16px';
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.innerHTML = `
+                    <div>
+                        <div style="font-weight: 700; font-size: 0.95rem;">${c.nombre_completo}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${c.boletos_cobrados} pasajes validados</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-weight: 800; color: var(--secondary);">Bs. ${parseFloat(c.monto_canje).toFixed(2)}</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 600;">PENDIENTE</div>
+                    </div>
+                `;
+                resumenDiv.appendChild(item);
+            });
+        } else {
+            resumenDiv.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">Sin actividad hoy.</p>';
+        }
+
+        // Validaciones
+        const validDiv = document.getElementById('validaciones-pendientes');
+        validDiv.innerHTML = '';
+        document.getElementById('count-pendientes').textContent = data.validaciones_pendientes.length;
+        
+        if (data.validaciones_pendientes && data.validaciones_pendientes.length > 0) {
+            data.validaciones_pendientes.forEach(v => {
+                const item = document.createElement('div');
+                item.className = 'glass-card';
+                item.style.padding = '16px';
+                item.style.borderLeft = '4px solid var(--warning)';
+                item.style.marginBottom = '12px';
+                item.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div>
+                            <div style="font-size: 0.9rem; font-weight: 700;">${v.nombre_completo}</div>
+                            <div style="font-size: 0.7rem; color: var(--text-muted); margin: 4px 0;">${v.tipo_descuento}</div>
+                            <div style="font-size: 0.65rem; color: var(--text-muted);">${v.fecha_solicitud}</div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <a href="../../uploads/documentos/${v.comprobante_url}" target="_blank" class="btn" style="padding: 4px 8px; font-size: 0.65rem; background: var(--bg-main); text-decoration: none; text-align: center;">
+                                <i class="fas fa-eye"></i> Ver Doc
+                            </a>
+                            <div style="display: flex; gap: 4px;">
+                                <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.65rem;" onclick="procesarPasajero(${v.validacion_id}, 'APROBADA')">SI</button>
+                                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.65rem;" onclick="procesarPasajero(${v.validacion_id}, 'RECHAZADA')">NO</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                validDiv.appendChild(item);
+            });
+        } else {
+            validDiv.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Sin solicitudes nuevas.</p>';
+        }
+
+        // Lista de Canjes
+        const canjesDiv = document.getElementById('lista-canjes');
+        canjesDiv.innerHTML = '';
+        if (data.canjes_pendientes && data.canjes_pendientes.length > 0) {
+            data.canjes_pendientes.forEach(c => {
+                const item = document.createElement('div');
+                item.className = 'glass-card';
+                item.style.padding = '16px';
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.innerHTML = `
+                    <div>
+                        <div style="font-weight: 700; font-size: 0.9rem;">${c.nombre_completo}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted);">Solicitado: ${c.fecha}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-weight: 800; color: var(--secondary); font-size: 1.1rem;">Bs. ${parseFloat(c.monto).toFixed(2)}</div>
+                        <button class="btn btn-primary" style="padding: 4px 12px; font-size: 0.7rem; margin-top: 4px;" onclick="pagarCanje(${c.canje_id})">PAGAR</button>
+                    </div>
+                `;
+                canjesDiv.appendChild(item);
+            });
+        } else {
+            canjesDiv.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 10px;">No hay liquidaciones pendientes.</p>';
+        }
+    }
+
+    async function procesarPasajero(id, estado) {
+        if (!confirm(`¿Deseas marcar esta solicitud como ${estado}?`)) return;
+        try {
+            const formData = new FormData();
+            formData.append('validacion_id', id);
+            formData.append('estado', estado);
+            const response = await fetch('../../backend/procesar_validacion_pasajero.php', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            alert(result.message);
+            if (result.success) loadDashboard();
+        } catch (err) { alert('Error al procesar validación.'); }
+    }
+
+    async function pagarCanje(id) {
+        if (!confirm('¿Confirmas que has entregado el dinero en efectivo al chofer?')) return;
+        
+        try {
+            const formData = new FormData();
+            formData.append('canje_id', id);
+            const response = await fetch('../../backend/procesar_canje.php', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            alert(result.message);
+            if (result.success) loadDashboard();
+        } catch (err) {
+            alert('Error al procesar el pago.');
+        }
+    }
+
+    loadDashboard();
+</script>
+
+<?php include '../includes/footer.php'; ?>

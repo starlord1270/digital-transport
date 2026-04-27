@@ -1,155 +1,96 @@
 <?php
-// backend/validacion-login.php
-
-// 1. Establecer la cabecera JSON
+/**
+ * DIGITAL TRANSPORT - VALIDACIÓN LOGIN (REFACTORIZADA A PDO)
+ */
 header('Content-Type: application/json');
+require_once 'includes/db.php';
 
-// 2. Incluir el archivo de conexión (bd.php)
-require_once 'bd.php'; 
+$response = ['success' => false, 'message' => 'Error de autenticación.', 'redirect' => ''];
 
-// Inicialización de la respuesta
-$response = [
-    'success' => false,
-    'message' => 'Error de autenticación.',
-    'redirect' => ''
-];
-
-// Comprobación de la conexión a la base de datos
-if ($conn->connect_error) {
-    $response['message'] = 'Error grave de conexión a la base de datos. Verifique el servidor MySQL.';
-    @$conn->close();
-    echo json_encode($response);
-    exit;
-}
-
-// 3. Recoger y Sanear los datos
-// 3. Recoger y Sanear los datos
-// INTENTO DE LEER JSON (Frontend moderno)
+// 1. LEER DATOS (JSON o POST)
 $jsonData = json_decode(file_get_contents('php://input'), true);
+$email = trim($jsonData['email'] ?? $_POST['email'] ?? '');
+$password = $jsonData['password'] ?? $_POST['password'] ?? '';
 
-if ($jsonData) {
-    // Si viene JSON
-    $email_input = $jsonData['email'] ?? null;
-    $password_input = $jsonData['password'] ?? null;
-} else {
-    // Si viene Form Data tradicional
-    $email_input = $_POST['email'] ?? null;
-    $password_input = $_POST['password'] ?? null;
-}
-
-if (!$email_input || !$password_input) {
+if (empty($email) || empty($password)) {
     $response['message'] = 'Faltan campos obligatorios.';
-    $conn->close(); 
     echo json_encode($response);
     exit;
 }
 
-$email = $conn->real_escape_string(trim($email_input));
-$password = $password_input;
+try {
+    // 2. BUSCAR USUARIO
+    $stmt = $pdo->prepare("SELECT usuario_id, password_hash, tipo_usuario_id, nombre_completo, saldo FROM USUARIO WHERE email = ?");
+    $stmt->execute([$email]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// 4. Preparar la consulta SQL
-$sql = "SELECT usuario_id, password_hash, tipo_usuario_id, nombre_completo FROM USUARIO WHERE email = ?"; 
-$stmt = $conn->prepare($sql);
-
-if ($stmt === false) {
-    $response['message'] = 'Error interno del servidor. No se pudo preparar la consulta.';
-    $conn->close();
-    echo json_encode($response);
-    exit;
-}
-
-// Enlazar parámetro y ejecutar
-$stmt->bind_param("s", $email);
-$stmt->execute();
-$result = $stmt->get_result();
-$user = $result->fetch_assoc();
-$stmt->close(); 
-
-if ($user) {
-    // 5. Verificar la contraseña
-    if (password_verify($password, $user['password_hash'])) {
+    if ($user && password_verify($password, $user['password_hash'])) {
+        // Credenciales correctas
+        if (session_status() === PHP_SESSION_NONE) session_start();
         
-        // Credenciales correctas. Iniciar sesión.
-        session_start();
-        
-        // ⭐ CORRECCIÓN CLAVE 1: Limpiar y asegurar la sesión
-        // Limpia completamente la sesión anterior y genera un nuevo ID para prevenir ataques de fijación de sesión.
-        $_SESSION = array(); 
-        session_regenerate_id(true); // <--- AÑADIDO: Regenera el ID de sesión por seguridad.
-        
+        session_regenerate_id(true);
         $_SESSION['usuario_id'] = $user['usuario_id'];
         $_SESSION['tipo_usuario_id'] = $user['tipo_usuario_id'];
-        $_SESSION['logged_in'] = true;
-        
-        // Guardar el nombre completo en la sesión 
         $_SESSION['nombre_completo'] = $user['nombre_completo'];
+        $_SESSION['saldo'] = $user['saldo'];
+        $_SESSION['logged_in'] = true;
 
         $tipo_id = $user['tipo_usuario_id'];
 
-        // 6. Determinar la redirección y obtener datos adicionales
-        
+        // 3. DETERMINAR REDIRECCIÓN
         if ($tipo_id == 4) { // ADMIN_LINEA
+            $stmt = $pdo->prepare("SELECT linea_id FROM ADMIN_LINEA WHERE usuario_id = ?");
+            $stmt->execute([$user['usuario_id']]);
+            $admin_data = $stmt->fetch();
             
-            $stmt_linea = $conn->prepare("SELECT linea_id FROM ADMIN_LINEA WHERE usuario_id = ?");
-            
-            if ($stmt_linea === false) {
-                // Manejar error si la consulta del admin de línea falla.
-                $response['success'] = false;
-                $response['message'] = "Error interno al verificar la línea. Contacte a soporte.";
+            if ($admin_data) {
+                $_SESSION['linea_id'] = $admin_data['linea_id'];
+                $response['success'] = true;
+                $response['message'] = '¡Bienvenido Administrador!';
+                $response['redirect'] = 'dashboard-admin-linea/dashboard-admin.php';
             } else {
-                $stmt_linea->bind_param("i", $user['usuario_id']);
-                $stmt_linea->execute();
-                $result_linea = $stmt_linea->get_result();
-                
-                if ($admin_data = $result_linea->fetch_assoc()) {
-                    $_SESSION['linea_id'] = $admin_data['linea_id']; 
-                    
-                    $response['success'] = true;
-                    $response['message'] = '¡Bienvenido Administrador! Redirigiendo...';
-                    $response['redirect'] = '/Competencia-Analisis/digital-transport/frontend/dashboard-admin-linea/dashboard-admin.php'; 
-                } else {
-                    $response['success'] = false;
-                    $response['message'] = "Error: Administrador de Línea sin asignación. Contacte a soporte.";
-                }
-                
-                $stmt_linea->close(); // <--- CORREGIDO: Cerrar el statement
+                $response['message'] = 'Administrador sin línea asignada.';
             }
 
         } elseif ($tipo_id == 3) { // CHOFER
-            
-            // ACCIÓN CLAVE 1: ACTUALIZAR ESTADO A 'ACTIVO'
-            $chofer_usuario_id = $user['usuario_id'];
-            
-            $sql_update = "UPDATE CHOFER SET estado_servicio = 'ACTIVO' WHERE usuario_id = ?";
-            $stmt_update = $conn->prepare($sql_update);
+            // Verificar si el chofer está validado
+            $stmt = $pdo->prepare("SELECT estado_servicio FROM CHOFER WHERE usuario_id = ?");
+            $stmt->execute([$user['usuario_id']]);
+            $chofer_status = $stmt->fetchColumn();
 
-            if ($stmt_update) {
-                $stmt_update->bind_param("i", $chofer_usuario_id);
-                $stmt_update->execute();
-                $stmt_update->close();
-            } 
-            // Nota: Se asume que el update fue exitoso para el flujo de login del chofer.
+            if ($chofer_status === 'PENDIENTE') {
+                $response['message'] = 'Tu cuenta aún está pendiente de validación por el administrador de la línea.';
+                echo json_encode($response);
+                exit;
+            }
+
+            // Si está validado, se pone en ACTIVO al iniciar sesión
+            $stmt = $pdo->prepare("UPDATE CHOFER SET estado_servicio = 'ACTIVO' WHERE usuario_id = ?");
+            $stmt->execute([$user['usuario_id']]);
             
             $response['success'] = true;
-            $response['message'] = '¡Bienvenido Chofer! Redirigiendo a Cobro...';
-            $response['redirect'] = '/Competencia-Analisis/digital-transport/frontend/choferes/cobro-chofer.php'; 
+            $response['message'] = '¡Bienvenido Chofer!';
+            $response['redirect'] = 'choferes/cobro-chofer.php';
         
-        } else {
-            // OTROS USUARIOS (Pasajero, Admin Central, etc.)
-            // REDIRECCIÓN CORREGIDA: Apuntar al index.php del frontend que actúa como dashboard de pasajero
+        } elseif ($tipo_id == 5) { // SUPER_ADMIN
             $response['success'] = true;
-            $response['message'] = '¡Bienvenido! Redirigiendo...';
-            $response['redirect'] = '/Competencia-Analisis/digital-transport/frontend/index.php'; 
+            $response['message'] = '¡Bienvenido Master Admin!';
+            $response['redirect'] = 'dashboard-superadmin/dashboard.php';
+
+        } else {
+            // PASAJEROS
+            $response['success'] = true;
+            $response['message'] = '¡Inicio de sesión exitoso!';
+            $response['redirect'] = 'index.php';
         }
         
     } else {
         $response['message'] = 'Email o Contraseña incorrectos.';
     }
-} else {
-    $response['message'] = 'Email o Contraseña incorrectos.';
+
+} catch (PDOException $e) {
+    $response['message'] = 'Error de servidor: ' . $e->getMessage();
 }
 
-// 7. Cerrar la conexión y enviar la respuesta
-$conn->close();
 echo json_encode($response);
-exit;
+?>
