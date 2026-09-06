@@ -1,0 +1,36 @@
+# DIGITAL TRANSPORT - APACHE PRODUCTION SECURITY CONFIGURATION
+
+# Desactivar el listado de directorios
+Options -Indexes
+
+# Desactivar firma del servidor
+ServerSignature Off
+
+# Denegar acceso a archivos sensibles y de configuración
+<FilesMatch "^\.env|^\.git|composer\.(json|lock)|phpunit\.xml|\.sql$|\.cache$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Forzar Redirección Automática HTTP a HTTPS (Soporte Apache directo + Cloudflare / Proxy)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} off [OR]
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # Bloquear acceso a carpetas sensibles
+    RewriteRule ^specs/ - [F,L]
+    RewriteRule ^scratch/ - [F,L]
+    RewriteRule ^tests/ - [F,L]
+</IfModule>
+
+# Cabeceras de seguridad HTTP & HSTS (Strict-Transport-Security)
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+</IfModule>
+

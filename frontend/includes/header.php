@@ -2,9 +2,13 @@
 /**
  * DIGITAL TRANSPORT - HEADER COMPONENT (PREMIUM)
  */
-if (session_status() === PHP_SESSION_NONE) {
+$securityPath = __DIR__ . '/../../backend/includes/security.php';
+if (file_exists($securityPath)) {
+    require_once $securityPath;
+} elseif (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
 
 // Lógica de sesión (Simplificada para el componente)
 $allowed_roles = [1, 2, 3, 4, 5, 6];

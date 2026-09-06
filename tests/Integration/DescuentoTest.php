@@ -2,54 +2,54 @@
 use PHPUnit\Framework\TestCase;
 
 class DescuentoTest extends TestCase {
-    private $conn;
+    private $pdo;
     private $testUsuarioId = null;
     private $testEmail = 'descuento_user@test.com';
-    // Asumiremos que el ID 2 corresponde a un 'Tipo Descuento' como Estudiante
     private $tipoDescuentoId = 2; 
 
     protected function setUp(): void {
-        $this->conn = new mysqli(DB_TEST_HOST, DB_TEST_USER, DB_TEST_PASS, DB_TEST_NAME);
-        
-        // --- 1. Limpieza de datos anteriores ---
-        $this->conn->query("DELETE FROM USUARIO WHERE email = '{$this->testEmail}'");
+        $host = defined('DB_TEST_HOST') ? DB_TEST_HOST : '127.0.0.1';
+        $user = defined('DB_TEST_USER') ? DB_TEST_USER : 'root';
+        $pass = defined('DB_TEST_PASS') ? DB_TEST_PASS : '';
+        $dbname = defined('DB_TEST_NAME') ? DB_TEST_NAME : 'digital_transport_test';
 
-        // --- 2. Preparar Pasajero ---
+        try {
+            $this->pdo = new PDO("mysql:host={$host};dbname={$dbname};charset=utf8mb4", $user, $pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+            ]);
+        } catch (PDOException $e) {
+            $this->markTestSkipped("Servidor MySQL de prueba no disponible: " . $e->getMessage());
+            return;
+        }
+
+        $this->pdo->exec("DELETE FROM USUARIO WHERE email = '{$this->testEmail}'");
         $password_hash = password_hash('pass', PASSWORD_DEFAULT);
-        $this->conn->query("INSERT INTO USUARIO (tipo_usuario_id, documento_identidad, nombre_completo, email, password_hash, saldo) 
-                            VALUES (1, '900', 'Descuento Test', '{$this->testEmail}', '{$password_hash}', 50.00)");
-        $this->testUsuarioId = $this->conn->insert_id;
+        $stmt = $this->pdo->prepare("INSERT INTO USUARIO (tipo_usuario_id, documento_identidad, nombre_completo, email, password_hash, saldo) VALUES (1, '900', 'Descuento Test', ?, ?, 50.00)");
+        $stmt->execute([$this->testEmail, $password_hash]);
+        $this->testUsuarioId = $this->pdo->lastInsertId();
 
-        // --- 3. Limpiar cualquier validación previa ---
-        $this->conn->query("DELETE FROM VALIDACION_ESPECIAL WHERE usuario_id = {$this->testUsuarioId}");
+        $this->pdo->exec("DELETE FROM VALIDACION_ESPECIAL WHERE usuario_id = {$this->testUsuarioId}");
     }
 
     protected function tearDown(): void {
-        // Limpieza de datos creados
-        $this->conn->query("DELETE FROM VALIDACION_ESPECIAL WHERE usuario_id = {$this->testUsuarioId}");
-        $this->conn->query("DELETE FROM USUARIO WHERE usuario_id = {$this->testUsuarioId}");
-        $this->conn->close();
+        if ($this->pdo && $this->testUsuarioId) {
+            $this->pdo->exec("DELETE FROM VALIDACION_ESPECIAL WHERE usuario_id = {$this->testUsuarioId}");
+            $this->pdo->exec("DELETE FROM USUARIO WHERE usuario_id = {$this->testUsuarioId}");
+        }
     }
 
     public function testAsignacionDescuentoExitoso() {
-        // --- 1. Simular la Lógica de Inserción en VALIDACION_ESPECIAL (CORRECCIÓN FINAL) ---
-        // Se corrigieron los nombres de columna a 'fecha_solicitud' y 'estado_validacion'.
-        // Se corrigió el valor a 'APROBADA' (en mayúsculas) para coincidir con el ENUM de la BD.
-        $sql_insert = "INSERT INTO VALIDACION_ESPECIAL (usuario_id, tipo_desc_id, fecha_solicitud, estado_validacion)
-                       VALUES (?, ?, NOW(), 'APROBADA')";
-        $stmt_insert = $this->conn->prepare($sql_insert);
-        $stmt_insert->bind_param("ii", $this->testUsuarioId, $this->tipoDescuentoId);
-        $result = $stmt_insert->execute();
+        $sql_insert = "INSERT INTO VALIDACION_ESPECIAL (usuario_id, tipo_desc_id, fecha_solicitud, estado_validacion) VALUES (?, ?, NOW(), 'APROBADA')";
+        $stmt_insert = $this->pdo->prepare($sql_insert);
+        $result = $stmt_insert->execute([$this->testUsuarioId, $this->tipoDescuentoId]);
 
-        // Aserción 1: Verificar que la inserción SQL fue exitosa
         $this->assertTrue($result, "La inserción de la validación especial debe ser exitosa.");
 
-        // --- 2. Verificar que el registro existe en la BD ---
-        $result_select = $this->conn->query("SELECT COUNT(*) as total FROM VALIDACION_ESPECIAL 
-                                             WHERE usuario_id = {$this->testUsuarioId} AND tipo_desc_id = {$this->tipoDescuentoId} AND estado_validacion = 'APROBADA'");
-        $total_registros = $result_select->fetch_assoc()['total'];
+        $stmt_select = $this->pdo->prepare("SELECT COUNT(*) as total FROM VALIDACION_ESPECIAL WHERE usuario_id = ? AND tipo_desc_id = ? AND estado_validacion = 'APROBADA'");
+        $stmt_select->execute([$this->testUsuarioId, $this->tipoDescuentoId]);
+        $total_registros = $stmt_select->fetch()['total'];
         
-        // Aserción 2: Debe existir exactamente 1 registro para este descuento y usuario
         $this->assertEquals(1, $total_registros, "El registro de validación especial no se encontró en la base de datos.");
     }
 }

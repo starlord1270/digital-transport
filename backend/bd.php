@@ -16,10 +16,11 @@ require_once __DIR__ . '/includes/db.php';
 $conn = $pdo;
 
 // Las constantes de conexión ya están en includes/db.php, pero si se necesitan:
-if (!defined('DB_SERVER')) define('DB_SERVER', 'localhost');
-if (!defined('DB_USERNAME')) define('DB_USERNAME', 'root');
-if (!defined('DB_PASSWORD')) define('DB_PASSWORD', '');
-if (!defined('DB_NAME')) define('DB_NAME', 'digital-transport');
+if (!defined('DB_SERVER')) define('DB_SERVER', getenv('DB_HOST') ?: 'localhost');
+if (!defined('DB_USERNAME')) define('DB_USERNAME', getenv('DB_USER') ?: 'root');
+if (!defined('DB_PASSWORD')) define('DB_PASSWORD', getenv('DB_PASS') !== false ? getenv('DB_PASS') : '');
+if (!defined('DB_NAME')) define('DB_NAME', getenv('DB_NAME') ?: 'digital-transport');
+
 
 // Nota: set_charset("utf8") no es necesario en PDO ya que se define en el DSN.
 ?>

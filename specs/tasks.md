@@ -15,6 +15,13 @@
 - [x] Mejoras de Funcionalidades
     - [x] Mejorar la UI/UX del "Pase Digital"
     - [x] Migración completa a PDO en el Backend
-- [ ] Verificación
-    - [ ] Ejecutar pruebas PHPUnit
-    - [ ] Verificación manual de la interfaz
+- [x] Verificación
+    - [x] Ejecutar pruebas PHPUnit (Suite ejecutada con 0 errores)
+    - [x] Verificación manual de la interfaz
+- [x] Preparación para Producción
+    - [x] Implementación de variables de entorno (`.env` / `.env.example`)
+    - [x] Hardening de seguridad (cabeceras HTTP, CSRF, cookies de sesión)
+    - [x] Migración completa de tests de integración a PDO
+    - [x] Creación de `.htaccess` con reglas de protección de archivos sensibles
+    - [x] Limpieza de scripts de depuración expuestos (`prueba_conexion.php`, `backend/test_db.php`)
+
