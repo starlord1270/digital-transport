@@ -3,17 +3,19 @@
  * DIGITAL TRANSPORT - GUARDAR PUNTO DE RECARGA + OPERADOR (SUPER ADMIN)
  */
 header('Content-Type: application/json');
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../includes/functions.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || (int)($_SESSION['tipo_usuario_id'] ?? 0) !== 5) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Acceso denegado.']);
+    exit;
 }
 
-require_once '../includes/db.php';
-require_once '../includes/functions.php';
-
-// Seguridad
-if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo_usuario_id'] != 5) {
-    echo json_encode(['success' => false, 'error' => 'Acceso denegado.']);
+if (!verifyCsrfToken($_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Token CSRF inválido o ausente.']);
     exit;
 }
 
@@ -37,21 +39,20 @@ try {
     $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM USUARIO WHERE email = ?");
     $stmtCheck->execute([$email]);
     if ($stmtCheck->fetchColumn() > 0) {
-        echo json_encode(['success' => false, 'error' => "El correo '$email' ya está registrado en el sistema. Por favor use otro."]);
+        echo json_encode(['success' => false, 'error' => "El correo '$email' ya está registrado en el sistema."]);
         exit;
     }
 
-    // 1. Crear Usuario Operador
+    // 1. Crear Usuario Operador (tipo_usuario_id = 2)
     $pass_hash = password_hash($password, PASSWORD_DEFAULT);
     $stmtUser = $pdo->prepare("INSERT INTO USUARIO (nombre_completo, email, password_hash, tipo_usuario_id, documento_identidad) VALUES (?, ?, ?, 2, ?)");
     $stmtUser->execute([$nombre_operador, $email, $pass_hash, 'PUNTO-'.time()]);
     $usuario_id = $pdo->lastInsertId();
 
     // 2. Crear Punto de Recarga
-    $stmtPunto = $pdo->prepare("INSERT INTO PUNTO_RECARGA (nombre, ubicacion, usuario_id, lat, lng) VALUES (?, ?, ?, ?, ?)");
-    $stmtPunto->execute([$nombre_punto, $ubicacion, $usuario_id, $lat, $lng]);
+    $stmtPunto = $pdo->prepare("INSERT INTO PUNTO_RECARGA (nombre, ubicacion, usuario_id, estado) VALUES (?, ?, ?, 'ACTIVO')");
+    $stmtPunto->execute([$nombre_punto, $ubicacion, $usuario_id]);
 
-    // Auditoría
     registrarAuditoria($pdo, $_SESSION['usuario_id'], 'NUEVO_PUNTO_RECARGA', "Se habilitó el punto '$nombre_punto' operado por $nombre_operador");
 
     $pdo->commit();
@@ -59,6 +60,8 @@ try {
 
 } catch (PDOException $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    echo json_encode(['success' => false, 'error' => 'Error: ' . $e->getMessage()]);
+    error_log("Error en guardar_punto_recarga: " . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Error al registrar el punto de recarga en la base de datos.']);
 }
 ?>

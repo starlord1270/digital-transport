@@ -17,6 +17,11 @@ if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo_usuario_id'] != 5) {
     exit;
 }
 
+if (!verifyCsrfToken()) {
+    echo json_encode(['success' => false, 'error' => 'Token CSRF inválido o ausente.']);
+    exit;
+}
+
 $punto_id = (int)($_POST['punto_id'] ?? 0);
 $nuevo_estado = $_POST['estado'] ?? '';
 
@@ -35,6 +40,7 @@ try {
     echo json_encode(['success' => true, 'message' => "Punto marcado como $nuevo_estado"]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    error_log("Error en toggle_punto_status: " . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => 'Error al cambiar estado del punto de recarga.']);
 }
 ?>

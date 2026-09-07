@@ -3,22 +3,28 @@
  * DIGITAL TRANSPORT - CHECK NEW PAYMENTS (POLLING)
  */
 header('Content-Type: application/json');
+require_once __DIR__ . '/includes/db.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-require_once 'includes/db.php';
-
-$chofer_id = (int)($_GET['chofer_id'] ?? 0);
-$last_id = (int)($_GET['last_id'] ?? 0);
-
-if ($chofer_id === 0) {
-    echo json_encode(['success' => false, 'error' => 'ID de chofer inválido.']);
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || (int)($_SESSION['tipo_usuario_id'] ?? 0) !== 3) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'error' => 'No autorizado']);
     exit;
 }
 
+$usuario_id = (int)$_SESSION['usuario_id'];
+$last_id = (int)($_GET['last_id'] ?? 0);
+
 try {
+    // Look up chofer_id for current authenticated session user
+    $stmtChofer = $pdo->prepare("SELECT chofer_id FROM CHOFER WHERE usuario_id = ?");
+    $stmtChofer->execute([$usuario_id]);
+    $chofer_id = (int)$stmtChofer->fetchColumn();
+
+    if ($chofer_id <= 0) {
+        echo json_encode(['success' => false, 'error' => 'Chofer no encontrado.']);
+        exit;
+    }
+
     // Buscar transacciones nuevas para este chofer
     $sql = "
         SELECT 
@@ -50,6 +56,7 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Error de base de datos.']);
 }
 ?>

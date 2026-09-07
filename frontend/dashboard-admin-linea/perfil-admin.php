@@ -1,135 +1,64 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Perfil - Administrador de Línea</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style>
-        /* CSS BÁSICO PARA DEMOSTRACIÓN */
-        body { font-family: Arial, sans-serif; background-color: #f4f5f7; padding: 20px; }
-        .perfil-container { max-width: 900px; margin: auto; background: white; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .header-perfil { background: #5540FF; color: white; padding: 25px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; }
-        
-        /* Contenedor de la información izquierda (foto/nombre) */
-        .header-info-wrapper { display: flex; align-items: center; }
-        
-        .rf-circle { width: 60px; height: 60px; background: #FFD700; color: #5540FF; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; margin-right: 20px; }
-        .info-basica { flex-grow: 1; }
-        .linea-admin { display: inline-block; background: rgba(255, 255, 255, 0.2); padding: 5px 10px; border-radius: 15px; font-size: 0.9em; margin-top: 10px; }
-        
-        /* Botones de acción del header (Dashboard y Editar/Guardar) */
-        .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 15px; /* Espacio entre el botón de Dashboard y las estadísticas */
-        }
-        .dashboard-btn {
-            background-color: rgba(255, 255, 255, 0.1);
-            color: white; 
-            text-decoration: none; 
-            padding: 8px 15px; 
-            border: 1px solid white; 
-            border-radius: 4px;
-            transition: background-color 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .dashboard-btn:hover {
-            background-color: rgba(255, 255, 255, 0.2);
-        }
+<?php
+/**
+ * DIGITAL TRANSPORT - PERFIL ADMIN DE LÍNEA UI
+ */
+$page_title = "Perfil - Administrador de Línea";
+$active_page = "perfil";
 
-        .stats { display: flex; margin-left: 20px;}
-        .stat-item { padding: 0 15px; text-align: center; border-left: 1px solid rgba(255, 255, 255, 0.3); }
-        .stat-item:first-child { border-left: none; }
-        .stat-number { font-size: 1.8em; font-weight: bold; }
-        .stat-label { font-size: 0.8em; opacity: 0.8; }
-        .contenido-perfil { padding: 20px; }
-        .seccion { margin-bottom: 25px; border: 1px solid #ddd; padding: 15px; border-radius: 6px; }
-        .alerta { padding: 10px; margin-bottom: 10px; border-radius: 4px; display: flex; align-items: center; }
-        .alerta-warning { border-left: 4px solid orange; background-color: #fff8e1; color: orange; }
-        .alerta-info { border-left: 4px solid #2196F3; background-color: #e3f2fd; color: #2196F3; }
-        .alerta-success { border-left: 4px solid green; background-color: #e8f5e9; color: green; }
-        .icono { margin-right: 10px; }
-        .info-personal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .info-personal-item { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 10px; }
-        
-        /* Edición de Datos Personales */
-        .editable-input { 
-            width: 100%; 
-            padding: 8px; 
-            margin-top: 5px; 
-            border: 1px solid #ccc; 
-            border-radius: 4px;
-            box-sizing: border-box;
-            font-size: 1em;
-            display: none; 
-        }
-        .editable-text {
-            display: block; 
-        }
-        .edit-mode .editable-input {
-            display: block; 
-        }
-        .edit-mode .editable-text {
-            display: none; 
-        }
-        .action-buttons button {
-            padding: 8px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background-color 0.3s;
-        }
-        #btn-guardar {
-            background-color: #4CAF50;
-            color: white;
-            margin-right: 10px;
-        }
-        #btn-cancelar {
-            background-color: #f44336;
-            color: white;
-        }
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-        /* Cambio de Contraseña */
-        .password-form {
-            display: none; /* Oculto por defecto */
-            margin-top: 15px;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background-color: #fafafa;
-        }
-        .password-form input {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        .password-buttons button {
-            padding: 10px 20px;
-            margin-right: 10px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        #btn-change-password-submit {
-            background-color: #2196F3;
-            color: white;
-        }
-        #btn-change-password-cancel {
-            background-color: #ddd;
-            color: #333;
-        }
-    </style>
-</head>
-<body>
+if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo_usuario_id'] != 4) {
+    header("Location: ../inicio-sesion-lineas-choferes/login.php");
+    exit();
+}
 
-<div class="perfil-container">
+require_once '../../backend/includes/db.php';
+require_once '../../backend/includes/security.php';
+
+include '../includes/header.php';
+?>
+
+<style>
+    .perfil-container { max-width: 900px; margin: auto; background: white; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .header-perfil { background: #5540FF; color: white; padding: 25px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; }
+    .header-info-wrapper { display: flex; align-items: center; }
+    .rf-circle { width: 60px; height: 60px; background: #FFD700; color: #5540FF; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; margin-right: 20px; }
+    .info-basica { flex-grow: 1; }
+    .linea-admin { display: inline-block; background: rgba(255, 255, 255, 0.2); padding: 5px 10px; border-radius: 15px; font-size: 0.9em; margin-top: 10px; }
+    .header-actions { display: flex; align-items: center; gap: 15px; }
+    .dashboard-btn { background-color: rgba(255, 255, 255, 0.1); color: white; text-decoration: none; padding: 8px 15px; border: 1px solid white; border-radius: 4px; transition: background-color 0.3s; display: flex; align-items: center; gap: 5px; }
+    .dashboard-btn:hover { background-color: rgba(255, 255, 255, 0.2); }
+    .stats { display: flex; margin-left: 20px;}
+    .stat-item { padding: 0 15px; text-align: center; border-left: 1px solid rgba(255, 255, 255, 0.3); }
+    .stat-item:first-child { border-left: none; }
+    .stat-number { font-size: 1.8em; font-weight: bold; }
+    .stat-label { font-size: 0.8em; opacity: 0.8; }
+    .contenido-perfil { padding: 20px; }
+    .seccion { margin-bottom: 25px; border: 1px solid #ddd; padding: 15px; border-radius: 6px; }
+    .alerta { padding: 10px; margin-bottom: 10px; border-radius: 4px; display: flex; align-items: center; }
+    .alerta-warning { border-left: 4px solid orange; background-color: #fff8e1; color: orange; }
+    .alerta-info { border-left: 4px solid #2196F3; background-color: #e3f2fd; color: #2196F3; }
+    .alerta-success { border-left: 4px solid green; background-color: #e8f5e9; color: green; }
+    .icono { margin-right: 10px; }
+    .info-personal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .info-personal-item { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 10px; }
+    .editable-input { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 1em; display: none; }
+    .editable-text { display: block; }
+    .edit-mode .editable-input { display: block; }
+    .edit-mode .editable-text { display: none; }
+    .action-buttons button { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background-color 0.3s; }
+    #btn-guardar { background-color: #4CAF50; color: white; margin-right: 10px; }
+    #btn-cancelar { background-color: #f44336; color: white; }
+    .password-form { display: none; margin-top: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: #fafafa; }
+    .password-form input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    .password-buttons button { padding: 10px 20px; margin-right: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    #btn-change-password-submit { background-color: #2196F3; color: white; }
+    #btn-change-password-cancel { background-color: #ddd; color: #333; }
+</style>
+
+<div class="perfil-container animate-fade-in">
     <div class="header-perfil">
         <div class="header-info-wrapper">
             <div class="rf-circle" id="user-initials">RF</div>
@@ -212,7 +141,7 @@
             
             <form id="password-change-form" class="password-form">
                 <input type="password" id="current_password" name="current_password" placeholder="Contraseña Actual" required>
-                <input type="password" id="new_password" name="new_password" placeholder="Nueva Contraseña (mín. 6 caracteres)" required>
+                <input type="password" id="new_password" name="new_password" placeholder="Nueva Contraseña (mín. 8 caracteres)" required>
                 <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirmar Nueva Contraseña" required>
                 <div class="password-buttons">
                     <button type="submit" id="btn-change-password-submit">Guardar Contraseña</button>
@@ -224,10 +153,9 @@
 </div>
 
 <script>
-    // Rutas para las APIs (Asegúrate que coincidan con tus nombres de archivo)
     const API_FETCH = '../../backend/fetch_perfil_admin.php';
     const API_UPDATE = '../../backend/update-perfil-admin.php'; 
-    const API_CHANGE_PASS = '../../backend/change-password-admin.php'; // Nueva ruta
+    const API_CHANGE_PASS = '../../backend/change-password-admin.php';
 
     let initialData = {}; 
     const section = document.getElementById('personal-info-section');
@@ -244,23 +172,18 @@
         'info-email': 'input-email'
     };
     
-    // --- FUNCIONES UTILITARIAS ---
-
     function getInitials(name) {
-        const parts = name.split(' ');
+        const parts = String(name || '').trim().split(' ');
         let initials = '';
         if (parts.length >= 2) {
             initials = parts[0][0] + parts[1][0];
-        } else if (parts.length === 1) {
+        } else if (parts.length === 1 && parts[0].length > 0) {
             initials = parts[0][0];
         }
         return initials.toUpperCase();
     }
-
-    // --- MANEJO DE EDICIÓN DE DATOS PERSONALES ---
     
     function setEditMode(isEditing) {
-        // Cierra el formulario de contraseña si se abre el modo edición
         if (isEditing) {
             passForm.style.display = 'none';
         }
@@ -271,14 +194,12 @@
         btnCancelar.style.display = isEditing ? 'block' : 'none';
 
         if (isEditing) {
-            // Copiar texto actual a los inputs y guardar datos originales
             for (const textId in fieldsMap) {
                 const textElement = document.getElementById(textId);
                 const inputElement = document.getElementById(fieldsMap[textId]);
                 
                 initialData[inputElement.dataset.field] = textElement.textContent;
                 
-                // Limpiar ' LP' al editar CI
                 if (textId === 'info-ci') {
                     inputElement.value = textElement.textContent.replace(' LP', '').trim();
                 } else {
@@ -289,7 +210,6 @@
     }
 
     function cancelEdit() {
-        // Restaurar textos originales
         for (const textId in fieldsMap) {
             const textElement = document.getElementById(textId);
             const inputElement = document.getElementById(fieldsMap[textId]);
@@ -297,8 +217,6 @@
         }
         setEditMode(false);
     }
-
-    // --- FETCH DE DATOS INICIALES ---
     
     async function fetchInitialData() {
         try {
@@ -308,7 +226,6 @@
             if (result.success) {
                 const data = result.data;
                 
-                // Header y Estadísticas (Carga de datos)
                 document.getElementById('user-initials').textContent = getInitials(data.nombre_completo);
                 document.getElementById('user-name').textContent = data.nombre_completo;
                 document.getElementById('user-ci').textContent = data.documento_identidad;
@@ -317,7 +234,6 @@
                 document.getElementById('total-choferes').textContent = data.total_choferes;
                 document.getElementById('total-vehiculos').textContent = data.total_vehiculos;
 
-                // Información Personal (Carga de datos en los elementos de texto)
                 document.getElementById('info-nombre').textContent = data.nombre_completo;
                 document.getElementById('info-ci').textContent = data.documento_identidad;
                 document.getElementById('info-email').textContent = data.email;
@@ -325,8 +241,8 @@
                 
             } else {
                 console.error("Error al cargar datos:", result.message);
-                alert("Error: " + result.message);
-                if (result.message.includes('Acceso denegado')) {
+                alert("Error: " + (result.message || 'Error de autenticación.'));
+                if (result.message && result.message.includes('Acceso denegado')) {
                      window.location.href = '../inicio-sesion-lineas-choferes/login.php'; 
                 }
             }
@@ -335,8 +251,6 @@
             alert('No se pudo conectar con el servidor para obtener los datos.');
         }
     }
-
-    // --- FUNCIÓN DE GUARDAR DATOS PERSONALES ---
     
     async function saveChanges() {
         const formData = new FormData();
@@ -374,19 +288,17 @@
             if (result.success) {
                 alert(result.message);
                 
-                // Actualizar los elementos de texto
                 document.getElementById('info-nombre').textContent = formData.get('nombre_completo');
                 document.getElementById('info-ci').textContent = formData.get('documento_identidad') + ' LP'; 
                 document.getElementById('info-email').textContent = formData.get('email');
                 
-                // Actualiza el nombre principal y las iniciales
                 document.getElementById('user-name').textContent = formData.get('nombre_completo');
                 document.getElementById('user-initials').textContent = getInitials(formData.get('nombre_completo'));
 
                 setEditMode(false);
                 
             } else {
-                alert("Error al guardar: " + result.message);
+                alert("Error al guardar: " + (result.error || result.message || 'Error en la solicitud.'));
             }
 
         } catch (error) {
@@ -395,15 +307,12 @@
         }
     }
 
-    // --- MANEJO DE CAMBIO DE CONTRASEÑA ---
-
     function resetPasswordForm() {
         passForm.reset();
         passForm.style.display = 'none';
     }
 
     btnShowPassForm.addEventListener('click', () => {
-        // Cierra el modo edición si está abierto
         setEditMode(false);
         passForm.style.display = 'block';
     });
@@ -422,8 +331,8 @@
             return;
         }
 
-        if (newPass.length < 6) {
-            alert('La nueva contraseña debe tener al menos 6 caracteres.');
+        if (newPass.length < 8) {
+            alert('La nueva contraseña debe tener al menos 8 caracteres.');
             return;
         }
 
@@ -437,9 +346,9 @@
 
             if (result.success) {
                 alert(result.message);
-                resetPasswordForm(); // Ocultar y limpiar el formulario
+                resetPasswordForm();
             } else {
-                alert("Error al cambiar contraseña: " + result.message);
+                alert("Error al cambiar contraseña: " + (result.error || result.message || 'Error al procesar la solicitud.'));
             }
 
         } catch (error) {
@@ -448,14 +357,11 @@
         }
     });
 
-    // --- EVENT LISTENERS ---
-    
     btnEditar.addEventListener('click', () => setEditMode(true));
     btnCancelar.addEventListener('click', cancelEdit);
     btnGuardar.addEventListener('click', saveChanges);
 
-    // Cargar datos al iniciar
     document.addEventListener('DOMContentLoaded', fetchInitialData);
 </script>
-</body>
-</html>
+
+<?php include '../includes/footer.php'; ?>

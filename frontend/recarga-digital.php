@@ -34,49 +34,11 @@ try {
     error_log("Error al actualizar saldo: " . $e->getMessage());
 }
 
-$status_message = ''; 
+// Las recargas se procesan EXCLUSIVAMENTE a través de backend/procesar_recarga.php
+// (solicitud) y backend/confirmar_recarga.php (acreditación por operador/superadmin).
+// Este archivo ya NO acredita saldo por sí mismo: solo muestra el formulario.
+$status_message = '';
 $is_success = false;
-
-// LÓGICA DE PROCESAMIENTO (REFACTORIZADA A PDO)
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $amount = filter_input(INPUT_POST, 'amount', FILTER_VALIDATE_FLOAT);
-    $payment_method = trim($_POST['payment_method'] ?? '');
-    
-    if ($amount === false || $amount <= 0) {
-        $status_message = 'Por favor, ingresa un monto de recarga válido.';
-    } else {
-        $usuario_id = $_SESSION['usuario_id'];
-        
-        try {
-            $pdo->beginTransaction();
-            
-            // 1. Obtener saldo actual
-            $stmt = $pdo->prepare("SELECT saldo FROM USUARIO WHERE usuario_id = ? FOR UPDATE");
-            $stmt->execute([$usuario_id]);
-            $current_balance = $stmt->fetchColumn();
-            
-            $new_balance = $current_balance + $amount;
-            
-            // 2. Actualizar saldo
-            $stmt = $pdo->prepare("UPDATE USUARIO SET saldo = ? WHERE usuario_id = ?");
-            $stmt->execute([$new_balance, $usuario_id]);
-            
-            // 3. Registrar transacción
-            $stmt = $pdo->prepare("INSERT INTO TRANSACCION (usuario_id, tipo, monto, fecha_hora) VALUES (?, 'RECARGA', ?, NOW())");
-            $stmt->execute([$usuario_id, $amount]);
-            
-            $pdo->commit();
-            
-            $_SESSION['saldo'] = $new_balance;
-            $is_success = true;
-            $status_message = "¡Recarga exitosa! Se han añadido Bs. " . number_format($amount, 2) . " a tu cuenta.";
-            
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            $status_message = "Error en el procesamiento: " . $e->getMessage();
-        }
-    }
-}
 
 include 'includes/header.php';
 ?>
@@ -97,9 +59,11 @@ include 'includes/header.php';
     <div style="display: grid; grid-template-columns: 1fr 350px; gap: 40px; align-items: start;">
         <!-- Formulario de Recarga -->
         <div class="card">
-            <form action="recarga-digital.php" method="POST">
+            <form id="recargaForm" action="../backend/procesar_recarga.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
+                
                 <!-- 1. Selección del Monto -->
-                <div style="margin-bottom: 40px;">
+                <div style="margin-bottom: 30px;">
                     <h3 style="margin-bottom: 24px;">1. Selecciona el monto</h3>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 16px; margin-bottom: 24px;">
                         <?php foreach([10, 20, 50, 100] as $m): ?>
@@ -110,68 +74,35 @@ include 'includes/header.php';
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label">Monto personalizado (Bs.)</label>
-                        <input type="number" name="amount" id="custom-amount" class="form-input" placeholder="0.00" step="0.01" min="1" required>
+                        <label class="form-label">Monto a recargar (Bs.)</label>
+                        <input type="number" name="amount" id="custom-amount" class="form-input" placeholder="0.00" step="0.01" min="1" max="5000" required>
                     </div>
                 </div>
 
                 <!-- 2. Método de Pago -->
-                <div style="margin-bottom: 40px;">
-                    <h3 style="margin-bottom: 24px;">2. Método de pago</h3>
-                    <div style="display: grid; gap: 16px; margin-bottom: 24px;">
-                        <label class="payment-method-card glass-card" style="display: flex; align-items: center; padding: 20px; cursor: pointer; gap: 20px;">
-                            <input type="radio" name="payment_method" value="tarjeta" checked onchange="togglePaymentDetails('tarjeta')">
-                            <div style="font-size: 1.5rem; color: var(--secondary);"><i class="fas fa-credit-card"></i></div>
-                            <div>
-                                <p style="font-weight: 600; margin: 0;">Tarjeta de Crédito / Débito</p>
-                                <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Visa, Mastercard, Maestro</p>
-                            </div>
-                        </label>
-                        <label class="payment-method-card glass-card" style="display: flex; align-items: center; padding: 20px; cursor: pointer; gap: 20px;">
-                            <input type="radio" name="payment_method" value="qr" onchange="togglePaymentDetails('qr')">
-                            <div style="font-size: 1.5rem; color: var(--accent);"><i class="fas fa-qrcode"></i></div>
-                            <div>
-                                <p style="font-weight: 600; margin: 0;">Pago Simple (QR)</p>
-                                <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Genera un código QR para pagar desde tu banco</p>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- Detalles del Pago (Dinámicos) -->
-                    <div id="details-tarjeta" class="payment-details glass-card animate-fade-in" style="padding: 24px; background: rgba(0,0,0,0.02);">
-                        <div style="display: grid; gap: 16px;">
-                            <div class="form-group">
-                                <label class="form-label">Número de Tarjeta</label>
-                                <input type="text" class="form-input" placeholder="0000 0000 0000 0000">
-                            </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                                <div class="form-group">
-                                    <label class="form-label">Fecha Expiración</label>
-                                    <input type="text" class="form-input" placeholder="MM/YY">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">CVV</label>
-                                    <input type="text" class="form-input" placeholder="123">
-                                </div>
-                            </div>
+                <div style="margin-bottom: 30px;">
+                    <h3 style="margin-bottom: 16px;">2. Método de pago</h3>
+                    <div class="payment-method-card glass-card" style="display: flex; align-items: center; padding: 20px; gap: 16px;">
+                        <div style="font-size: 1.5rem; color: var(--accent);"><i class="fas fa-qrcode"></i></div>
+                        <div>
+                            <p style="font-weight: 600; margin: 0;">Pago Bancario / Transferencia (QR)</p>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 4px 0 0;">Realiza la transferencia o el pago QR y registra el número de referencia o comprobante. El saldo se acredita tras la confirmación del operador del punto de recarga.</p>
                         </div>
                     </div>
 
-                    <div id="details-qr" class="payment-details glass-card animate-fade-in" style="padding: 24px; text-align: center; display: none; background: rgba(0,0,0,0.02);">
-                        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px;">Escanea el código QR desde tu aplicación bancaria:</p>
-                        <div style="width: 280px; height: 280px; background: white; border-radius: 12px; padding: 12px; margin: 0 auto; box-shadow: var(--shadow-lg); overflow: hidden; display: flex; align-items: center; justify-content: center;">
-                            <img src="../recarga.jpeg?v=3" alt="QR de Pago" style="width: 100%; height: 100%; object-fit: contain; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;">
-                        </div>
-                        <p style="margin-top: 20px; font-weight: 700; font-size: 1rem; color: var(--accent); letter-spacing: 1px;">Bs. <span id="qr-amount-display">0.00</span></p>
-                        <p style="margin-top: 8px; font-weight: 600; font-size: 0.8rem; color: var(--danger);">Vence en: <span id="timer">05:00</span></p>
+                    <div class="form-group" style="margin-top: 20px; margin-bottom: 24px;">
+                        <label class="form-label">Número de Referencia de Pago / Comprobante Bancario</label>
+                        <input type="text" name="referencia_pago" id="referencia_pago" class="form-input" placeholder="Ej: 894561230" required minlength="6">
+                        <small style="color: var(--text-muted); display: block; margin-top: 4px;">Ingrese el nro. de transacción o comprobante emitido por su banco.</small>
                     </div>
                 </div>
 
                 <button type="submit" class="btn btn-primary" style="width: 100%; padding: 18px; font-size: 1.1rem;">
-                    Confirmar Recarga <i class="fas fa-arrow-right"></i>
+                    Confirmar y Procesar Recarga <i class="fas fa-shield-alt"></i>
                 </button>
             </form>
         </div>
+
 
         <!-- Resumen de Cuenta -->
         <div class="glass-card" style="padding: 32px;">
@@ -222,27 +153,6 @@ include 'includes/header.php';
     function updateDisplay(val) {
         const amount = parseFloat(val) || 0;
         totalDisplay.textContent = 'Bs. ' + amount.toFixed(2);
-        const qrAmount = document.getElementById('qr-amount-display');
-        if (qrAmount) qrAmount.textContent = amount.toFixed(2);
-    }
-
-    function togglePaymentDetails(type) {
-        document.querySelectorAll('.payment-details').forEach(el => el.style.display = 'none');
-        document.getElementById('details-' + type).style.display = 'block';
-        if (type === 'qr') startTimer();
-    }
-
-    let timerInterval;
-    function startTimer() {
-        clearInterval(timerInterval);
-        let time = 300; // 5 minutos
-        const display = document.getElementById('timer');
-        timerInterval = setInterval(() => {
-            const minutes = Math.floor(time / 60);
-            const seconds = time % 60;
-            display.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-            if (--time < 0) clearInterval(timerInterval);
-        }, 1000);
     }
 
     customAmount.addEventListener('input', (e) => {

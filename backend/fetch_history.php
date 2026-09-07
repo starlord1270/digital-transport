@@ -79,7 +79,8 @@ try {
     ]);
 
 } catch (PDOException $e) {
+    error_log("Error en fetch_history: " . $e->getMessage());
     http_response_code(500);
-    echo json_encode(["error" => "Error de base de datos: " . $e->getMessage()]);
+    echo json_encode(["error" => "Error de base de datos al obtener el historial."]);
 }
 ?>

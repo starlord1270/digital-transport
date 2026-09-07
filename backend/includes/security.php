@@ -62,6 +62,13 @@ if (!function_exists('getCsrfToken')) {
     }
 }
 
+if (!function_exists('generateCsrfToken')) {
+    function generateCsrfToken() {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        return $_SESSION['csrf_token'];
+    }
+}
+
 if (!function_exists('verifyCsrfToken')) {
     function verifyCsrfToken($token) {
         if (empty($_SESSION['csrf_token']) || empty($token)) {

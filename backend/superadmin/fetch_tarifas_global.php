@@ -23,6 +23,7 @@ try {
     echo json_encode(['success' => true, 'tarifas' => $tarifas]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    error_log("Error en fetch_tarifas_global: " . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => 'Error al obtener tarifas globales.']);
 }
 ?>

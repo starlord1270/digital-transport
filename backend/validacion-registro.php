@@ -32,18 +32,30 @@ if (empty($nombre_completo) || empty($documento_identidad) || empty($email) || e
     sendResponse(false, 'Por favor, complete todos los campos obligatorios.');
 }
 
+if (strlen($password) < 8) {
+    sendResponse(false, 'La contraseña debe tener al menos 8 caracteres.');
+}
+
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendResponse(false, 'El formato del email no es válido.');
+}
+
+// Control estricto de roles en registro público: No se permite auto-registrarse como Admin de Línea (4) ni SuperAdmin (5)
+if ($tipo_usuario_id === 4 || $tipo_usuario_id === 5) {
+    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (empty($_SESSION['usuario_id']) || ($_SESSION['tipo_usuario_id'] ?? 0) != 5) {
+        sendResponse(false, 'Acceso restringido: El registro de administradores debe realizarlo un SuperAdmin autenticado.');
+    }
 }
 
 try {
     $pdo->beginTransaction();
 
     // 3. VERIFICAR EMAIL EXISTENTE
-    $stmt = $pdo->prepare("SELECT usuario_id FROM USUARIO WHERE email = ?");
-    $stmt->execute([$email]);
+    $stmt = $pdo->prepare("SELECT usuario_id FROM USUARIO WHERE email = ? OR documento_identidad = ?");
+    $stmt->execute([$email, $documento_identidad]);
     if ($stmt->fetch()) {
-        throw new Exception('El email ya se encuentra registrado.');
+        throw new Exception('El email o documento de identidad ya se encuentra registrado.');
     }
 
     // 4. INSERTAR USUARIO
@@ -58,13 +70,12 @@ try {
     $rol_texto = 'Usuario';
 
     // 5. LÓGICA POR ROL
-    if ($tipo_usuario_id === 4) { // ADMIN_LINEA
+    if ($tipo_usuario_id === 4) { // ADMIN_LINEA (Solo por SuperAdmin)
         $stmt = $pdo->prepare("INSERT INTO ADMIN_LINEA (usuario_id, linea_id, cargo) VALUES (?, ?, ?)");
         $stmt->execute([$usuario_id, $linea_id, $cargo]);
         $rol_texto = 'Administrador de Línea';
 
     } elseif ($tipo_usuario_id === 3) { // CHOFER
-        // Verificar vehículo
         $stmt = $pdo->prepare("SELECT placa FROM VEHICULO WHERE placa = ?");
         $stmt->execute([$vehiculo_placa]);
         if (!$stmt->fetch()) {
@@ -73,29 +84,52 @@ try {
         }
         $stmt = $pdo->prepare("INSERT INTO CHOFER (usuario_id, linea_id, licencia, vehiculo_placa, estado_servicio) VALUES (?, ?, ?, ?, 'PENDIENTE')");
         $stmt->execute([$usuario_id, $linea_id, $licencia, $vehiculo_placa]);
-        $rol_texto = 'Chofer (En espera de validación)';
+        $rol_texto = 'Chofer (En espera de validación por Admin de Línea)';
         
     } else {
         // LÓGICA DE PASAJERO CON PERFILES
         $rol_texto = 'Pasajero';
         
         if ($perfil_tipo === 'estudiante' || $perfil_tipo === 'tercera_edad') {
-            $tipo_desc_id = ($perfil_tipo === 'estudiante') ? 2 : 3; // 2=Estudiante, 3=Tercera Edad
+            $tipo_desc_id = ($perfil_tipo === 'estudiante') ? 2 : 3;
             
-            // Procesar Archivo
             if (!isset($_FILES['comprobante']) || $_FILES['comprobante']['error'] !== UPLOAD_ERR_OK) {
-                throw new Exception('Es obligatorio subir un comprobante para el perfil seleccionado.');
+                throw new Exception('Es obligatorio subir un comprobante válido para el perfil seleccionado.');
             }
+
+            // Validar extensión de archivo
+            $file_info = pathinfo($_FILES['comprobante']['name']);
+            $ext = strtolower($file_info['extension'] ?? '');
+            $allowed_exts = ['png', 'jpg', 'jpeg', 'pdf'];
+            if (!in_array($ext, $allowed_exts)) {
+                throw new Exception('Formato de archivo no permitido. Solo se aceptan PNG, JPG, JPEG o PDF.');
+            }
+
+            // Validar MIME real
+            $tmp_path = $_FILES['comprobante']['tmp_name'];
+            $mime_type = mime_content_type($tmp_path);
+            $allowed_mimes = ['image/png', 'image/jpeg', 'application/pdf'];
+            if (!in_array($mime_type, $allowed_mimes)) {
+                throw new Exception('El contenido del archivo no coincide con un formato permitido.');
+            }
+
+            // Validar tamaño máximo (5MB)
+            if ($_FILES['comprobante']['size'] > 5 * 1024 * 1024) {
+                throw new Exception('El archivo excede el tamaño máximo permitido de 5 MB.');
+            }
+
+            // Generar nombre aleatorio seguro en servidor
+            $secure_filename = bin2hex(random_bytes(16)) . '.' . $ext;
+            $target_dir = __DIR__ . "/../uploads/documentos/";
+            if (!is_dir($target_dir)) {
+                mkdir($target_dir, 0755, true);
+            }
+            $target_path = $target_dir . $secure_filename;
             
-            $file_tmp = $_FILES['comprobante']['tmp_name'];
-            $file_name = time() . "_" . $_FILES['comprobante']['name'];
-            $target_path = "../uploads/documentos/" . $file_name;
-            
-            if (move_uploaded_file($file_tmp, $target_path)) {
-                // Registrar solicitud de validación especial con la URL del archivo
+            if (move_uploaded_file($tmp_path, $target_path)) {
                 $stmt = $pdo->prepare("INSERT INTO VALIDACION_ESPECIAL (usuario_id, tipo_desc_id, comprobante_url, estado_validacion, fecha_solicitud) VALUES (?, ?, ?, 'PENDIENTE', NOW())");
-                $stmt->execute([$usuario_id, $tipo_desc_id, $file_name]);
-                $rol_texto .= " (Solicitud de tarifa reducida en revisión)";
+                $stmt->execute([$usuario_id, $tipo_desc_id, $secure_filename]);
+                $rol_texto .= " (Solicitud de tarifa reducida enviada)";
             } else {
                 throw new Exception('Error al guardar el comprobante en el servidor.');
             }
@@ -106,7 +140,11 @@ try {
     sendResponse(true, "✅ Registro exitoso como $rol_texto. Ahora puedes iniciar sesión.");
 
 } catch (Exception $e) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
-    sendResponse(false, 'Error: ' . $e->getMessage()); 
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    error_log("Error en validacion-registro: " . $e->getMessage());
+    sendResponse(false, 'Error en el servidor al procesar el registro.'); 
 }
+
 ?>

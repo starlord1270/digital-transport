@@ -3,15 +3,18 @@
  * DIGITAL TRANSPORT - SOLICITAR CANJE (PDO)
  */
 header('Content-Type: application/json');
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/security.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || (int)($_SESSION['tipo_usuario_id'] ?? 0) !== 3) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Acceso no autorizado']);
+    exit;
 }
 
-require_once 'includes/db.php';
-
-if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo_usuario_id'] != 3) {
-    echo json_encode(['success' => false, 'message' => 'Acceso no autorizado']);
+if (!verifyCsrfToken($_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Token CSRF inválido o ausente.']);
     exit;
 }
 
@@ -54,6 +57,7 @@ try {
     echo json_encode(['success' => true, 'message' => "Solicitud de liquidación por Bs. " . number_format($saldo_pendiente, 2) . " enviada correctamente."]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'message' => 'Error de BD: ' . $e->getMessage()]);
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Error de base de datos.']);
 }
 ?>

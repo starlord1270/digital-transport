@@ -1,0 +1,37 @@
+# Secretos y configuración local
+.env
+.env.*
+!.env.example
+
+# Control de versiones y herramientas
+.git
+.gitignore
+.gitattributes
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# Dependencias y caches (no necesarias en la imagen de runtime)
+vendor
+composer.json
+composer.lock
+.phpunit.result.cache
+.phpunit.cache
+phpunit.xml
+
+# Pruebas, docs y scripts internos (no deben ir a producción)
+tests
+test
+docs
+specs
+scratch
+
+# Archivos de desarrollo / contenido subido por usuarios
+*.log
+*.sql
+recarga.jpeg
+
+# Documentos subidos por usuarios (mantener solo la protección .htaccess)
+uploads/documentos/*
+!uploads/documentos/.htaccess

@@ -47,6 +47,7 @@ try {
         echo json_encode(['success' => false, 'message' => 'Usuario no encontrado.']);
     }
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'message' => 'Error de BD: ' . $e->getMessage()]);
+    error_log("Error en fetch-perfil-pasajero: " . $e->getMessage());
+    echo json_encode(['success' => false, 'message' => 'Error al obtener el perfil del pasajero.']);
 }
 ?>

@@ -39,7 +39,7 @@
     <php>
         <const name="DB_TEST_HOST" value="127.0.0.1"/> 
         <const name="DB_TEST_USER" value="root"/>
-        <const name="DB_TEST_PASS" value=""/> 
-        <const name="DB_TEST_NAME" value="digital_transport_test"/>
+        <const name="DB_TEST_PASS" value="root"/> 
+        <const name="DB_TEST_NAME" value="digital-transport"/>
     </php>
 </phpunit>

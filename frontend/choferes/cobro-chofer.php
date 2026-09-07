@@ -113,6 +113,10 @@ include '../includes/header.php';
         } catch (e) { console.error(e); }
     }
 
+    function escapeHtml(str) {
+        return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
     function renderNewPayments(pagos) {
         const feed = document.getElementById('pagos-feed');
         if (lastPaymentId === 0) feed.innerHTML = ''; // Limpiar placeholder inicial
@@ -125,12 +129,17 @@ include '../includes/header.php';
             item.style.display = 'flex';
             item.style.justifyContent = 'space-between';
             item.style.alignItems = 'center';
+            
+            const safePasajero = escapeHtml(p.pasajero);
+            const safeHora = escapeHtml(p.hora);
+            const safeMonto = parseFloat(p.monto).toFixed(2);
+
             item.innerHTML = `
                 <div>
-                    <div style="font-weight: 700; color: var(--text-main);">${p.pasajero}</div>
-                    <div style="font-size: 0.7rem; color: var(--text-muted);">${p.hora}</div>
+                    <div style="font-weight: 700; color: var(--text-main);">${safePasajero}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">${safeHora}</div>
                 </div>
-                <div style="font-weight: 800; color: var(--accent); font-size: 1.2rem;">+ ${parseFloat(p.monto).toFixed(2)} Bs</div>
+                <div style="font-weight: 800; color: var(--accent); font-size: 1.2rem;">+ ${safeMonto} Bs</div>
             `;
             feed.prepend(item);
             

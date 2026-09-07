@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: digital-transport-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: digital-transport
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database_reset.sql:/docker-entrypoint-initdb.d/database_reset.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: digital-transport-web
+    restart: always
+    ports:
+      - "8080:80"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=digital-transport
+      - DB_USER=root
+      - DB_PASS=root
+      - APP_ENV=production
+      # Secretos de firma QR y CSRF. Defínelos antes de levantar el stack:
+      #   export QR_SECRET="$(openssl rand -hex 32)"
+      #   export CSRF_SECRET="$(openssl rand -hex 32)"
+      # Si quedan vacíos, los endpoints de QR fallan cerrado (500 de configuración).
+      - CSRF_SECRET=${CSRF_SECRET:-}
+      - QR_SECRET=${QR_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:

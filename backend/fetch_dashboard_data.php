@@ -3,22 +3,37 @@
  * DIGITAL TRANSPORT - FETCH DASHBOARD DATA (ADMIN LÍNEA) - PDO
  */
 header('Content-Type: application/json');
+require_once __DIR__ . '/includes/db.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+    echo json_encode(['success' => false, 'error' => 'Acceso no autorizado.']);
+    exit;
 }
 
-require_once 'includes/db.php';
+$userRole = (int)($_SESSION['tipo_usuario_id'] ?? 0);
+$usuarioId = (int)$_SESSION['usuario_id'];
 
-// 1. Verificación de permisos
-$lineaId = isset($_GET['linea_id']) ? (int)$_GET['linea_id'] : ($_SESSION['linea_id'] ?? 0);
-
-if ($lineaId === 0 || !isset($_SESSION['usuario_id']) || $_SESSION['tipo_usuario_id'] != 4) {
+if (!in_array($userRole, [4, 5], true)) {
     echo json_encode(['success' => false, 'error' => 'Acceso no autorizado.']);
     exit;
 }
 
 try {
+    // Si es Admin de Línea (4), obtener su linea_id de la BD para prevenir IDOR
+    if ($userRole === 4) {
+        $stmtLinea = $pdo->prepare("SELECT linea_id FROM ADMIN_LINEA WHERE usuario_id = ?");
+        $stmtLinea->execute([$usuarioId]);
+        $lineaId = (int)$stmtLinea->fetchColumn();
+    } else {
+        // SuperAdmin (5) puede especificar linea_id en GET
+        $lineaId = isset($_GET['linea_id']) ? (int)$_GET['linea_id'] : (int)($_SESSION['linea_id'] ?? 0);
+    }
+
+    if ($lineaId <= 0) {
+        echo json_encode(['success' => false, 'error' => 'Línea no asignada o inválida.']);
+        exit;
+    }
+
     $results = [];
 
     // 1. Total Recaudado Hoy y Boletos Pendientes
@@ -39,8 +54,8 @@ try {
     $stmt->execute([$lineaId]);
     $recaudadoData = $stmt->fetch();
 
-    $results['total_recaudado'] = $recaudadoData['total_recaudado'] ?? 0.00;
-    $results['boletos_pendientes'] = $recaudadoData['boletos_pendientes'] ?? 0;
+    $results['total_recaudado'] = (float)($recaudadoData['total_recaudado'] ?? 0.00);
+    $results['boletos_pendientes'] = (int)($recaudadoData['boletos_pendientes'] ?? 0);
     
     // 2. Choferes Activos
     $sqlChoferesActivos = "
@@ -57,13 +72,13 @@ try {
     ";
     $stmt = $pdo->prepare($sqlChoferesActivos);
     $stmt->execute([$lineaId]);
-    $results['choferes_activos'] = $stmt->fetchColumn() ?? 0;
+    $results['choferes_activos'] = (int)($stmt->fetchColumn() ?? 0);
 
     // 2.5 Choferes Pendientes de Validación
     $sqlPendientes = "SELECT COUNT(*) FROM CHOFER WHERE linea_id = ? AND estado_servicio = 'PENDIENTE'";
     $stmt = $pdo->prepare($sqlPendientes);
     $stmt->execute([$lineaId]);
-    $results['choferes_pendientes_count'] = $stmt->fetchColumn() ?? 0;
+    $results['choferes_pendientes_count'] = (int)($stmt->fetchColumn() ?? 0);
 
     // 2.7 Solicitudes de Canje/Liquidación Pendientes
     $sqlCanjes = "
@@ -103,7 +118,7 @@ try {
         WHERE 
             C.linea_id = ? 
         GROUP BY 
-            U.nombre_completo
+            C.chofer_id, U.nombre_completo
         ORDER BY 
             monto_canje DESC
     ";
@@ -137,6 +152,7 @@ try {
     echo json_encode(['success' => true, 'data' => $results]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => 'Error de BD: ' . $e->getMessage()]);
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Error de base de datos.']);
 }
 ?>

@@ -78,7 +78,7 @@ include 'includes/header.php';
                 <h3 style="margin-bottom: 32px; font-weight: 700; letter-spacing: -0.5px;">Tu Pase de Abordaje</h3>
                 
                 <div class="glass-card" style="display: inline-block; padding: 24px; background: white; margin-bottom: 32px; box-shadow: var(--shadow-lg);">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=USER_<?php echo $_SESSION['usuario_id']; ?>" alt="QR de Usuario" style="display: block;">
+                    <img id="passenger-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=Cargando..." alt="QR de Usuario" style="display: block; width: 250px; height: 250px;">
                 </div>
 
                 <div style="max-width: 300px; margin: 0 auto;">
@@ -117,6 +117,23 @@ include 'includes/header.php';
     </div>
 
     <script>
+        // Cargar QR Criptográfico Firmado (HMAC-SHA256)
+        async function loadSignedQR() {
+            try {
+                const response = await fetch('../backend/generar_qr_pago.php');
+                const data = await response.json();
+                if (data.success && data.qr_payload) {
+                    const qrImg = document.getElementById('passenger-qr-img');
+                    if (qrImg) {
+                        const encoded = encodeURIComponent(data.qr_payload);
+                        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encoded}`;
+                    }
+                }
+            } catch (e) {
+                console.error("Error cargando QR de seguridad:", e);
+            }
+        }
+
         // Carga rápida del mini historial
         async function loadMiniHistory() {
             try {
@@ -137,6 +154,8 @@ include 'includes/header.php';
                 }
             } catch (e) { console.error(e); }
         }
+        loadSignedQR();
+        setInterval(loadSignedQR, 240000); // Refrescar QR cada 4 minutos
         loadMiniHistory();
     </script>
 

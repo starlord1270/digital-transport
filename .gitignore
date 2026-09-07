@@ -1,0 +1,26 @@
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+
+# Dependency directories
+/vendor/
+/node_modules/
+
+# Uploaded User Documents & Sensitive Media
+/uploads/documentos/*
+!/uploads/documentos/.htaccess
+!/uploads/documentos/.gitkeep
+
+# IDEs, OS & Temporary files
+.DS_Store
+Thumbs.db
+*.log
+scratch/
+.tmp/
+.idea/
+.vscode/
+
+# PHPUnit / Test caches
+.phpunit.cache/
+.phpunit.result.cache

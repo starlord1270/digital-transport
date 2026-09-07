@@ -5,14 +5,23 @@ Sistema avanzado de gestión y cobro digital para transporte público.
 ## 🚀 Inicio Rápido
 
 1. **Requisitos**:
-   - PHP 7.4+
-   - MySQL 5.7+ / MariaDB 10.4+
+   - PHP 8.0+
+   - MySQL 8.0+ / Docker & Docker Compose
    - Servidor web (Apache/Nginx)
 
-2. **Instalación**:
+2. **Instalación con Docker (Recomendado)**:
+   ```bash
+   # Levantar base de datos e importar automáticamente database_reset.sql
+   docker-compose up -d
+
+   # Ejecutar suite de pruebas PHPUnit
+   ./vendor/bin/phpunit
+   ```
+
+3. **Instalación Tradicional**:
    - Clona el repositorio en tu servidor local.
    - Importa el archivo `database_reset.sql` en tu base de datos MySQL.
-   - Configura la conexión en `backend/bd.php`.
+   - Configura las variables de entorno en `.env` (guíate de `.env.example`).
    - Abre `frontend/index.php` en tu navegador.
 
 ## 🛠️ Tecnologías

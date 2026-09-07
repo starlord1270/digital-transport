@@ -1,20 +1,24 @@
 <?php
 /**
- * DIGITAL TRANSPORT - CHANGE PASSWORD (REFACTORIZADA)
+ * DIGITAL TRANSPORT - CHANGE PASSWORD PASAJERO (PDO)
  */
 header('Content-Type: application/json');
-require_once 'includes/db.php';
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/security.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-if (!isset($_SESSION['usuario_id'])) {
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+    http_response_code(401);
     echo json_encode(['success' => false, 'message' => 'Acceso denegado.']);
     exit;
 }
 
-$user_id = $_SESSION['usuario_id'];
+if (!verifyCsrfToken($_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Token CSRF inválido o ausente.']);
+    exit;
+}
+
+$user_id = (int)$_SESSION['usuario_id'];
 $current_password = $_POST['current_password'] ?? '';
 $new_password = $_POST['new_password'] ?? '';
 $confirm_password = $_POST['confirm_password'] ?? '';
@@ -26,6 +30,11 @@ if (empty($current_password) || empty($new_password) || empty($confirm_password)
 
 if ($new_password !== $confirm_password) {
     echo json_encode(['success' => false, 'message' => 'Las contraseñas no coinciden.']);
+    exit;
+}
+
+if (strlen($new_password) < 8) {
+    echo json_encode(['success' => false, 'message' => 'La nueva contraseña debe tener al menos 8 caracteres.']);
     exit;
 }
 
@@ -46,6 +55,7 @@ try {
     echo json_encode(['success' => true, 'message' => 'Contraseña actualizada con éxito.']);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'message' => 'Error de seguridad: ' . $e->getMessage()]);
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Error al cambiar contraseña en la base de datos.']);
 }
 ?>

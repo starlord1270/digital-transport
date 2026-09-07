@@ -34,6 +34,7 @@ try {
     echo json_encode(['success' => true, 'lineas' => $lineas]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    error_log("Error en fetch_lineas_global: " . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => 'Error al obtener lista de líneas.']);
 }
 ?>

@@ -58,6 +58,7 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    error_log("Error en fetch_recaudacion_chofer: " . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => 'Error al obtener datos de recaudación.']);
 }
 ?>

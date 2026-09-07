@@ -64,10 +64,10 @@ try {
     }
 
 } catch (PDOException $e) {
-    // Registrar el error detallado en el log del servidor
     error_log("Error en fetch-perfil-chofer: " . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => 'Error de base de datos: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => 'Error al obtener datos del chofer.']);
 } catch (Exception $e) {
-    echo json_encode(['success' => false, 'message' => 'Error general: ' . $e->getMessage()]);
+    error_log("Error general en fetch-perfil-chofer: " . $e->getMessage());
+    echo json_encode(['success' => false, 'message' => 'Error al procesar solicitud.']);
 }
 ?>

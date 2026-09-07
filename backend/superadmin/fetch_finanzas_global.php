@@ -70,6 +70,7 @@ try {
     echo json_encode(['success' => true, 'stats' => $stats]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    error_log("Error en fetch_finanzas_global: " . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => 'Error al obtener finanzas globales.']);
 }
 ?>

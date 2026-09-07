@@ -3,23 +3,38 @@
  * DIGITAL TRANSPORT - FETCH REPORTES FLUJO CAJA (PDO)
  */
 header('Content-Type: application/json');
+require_once __DIR__ . '/includes/db.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+    echo json_encode(['success' => false, 'error' => 'Acceso no autorizado.']);
+    exit;
 }
 
-require_once 'includes/db.php';
+$userRole = (int)($_SESSION['tipo_usuario_id'] ?? 0);
+$usuarioId = (int)$_SESSION['usuario_id'];
 
-$lineaId = isset($_GET['linea_id']) ? (int)$_GET['linea_id'] : ($_SESSION['linea_id'] ?? 0);
-$fechaDesde = $_GET['desde'] ?? date('Y-m-d', strtotime('-7 days'));
-$fechaHasta = $_GET['hasta'] ?? date('Y-m-d');
-
-if ($lineaId === 0 || !isset($_SESSION['usuario_id']) || $_SESSION['tipo_usuario_id'] != 4) {
+if (!in_array($userRole, [4, 5], true)) {
     echo json_encode(['success' => false, 'error' => 'Acceso no autorizado.']);
     exit;
 }
 
 try {
+    if ($userRole === 4) {
+        $stmtLinea = $pdo->prepare("SELECT linea_id FROM ADMIN_LINEA WHERE usuario_id = ?");
+        $stmtLinea->execute([$usuarioId]);
+        $lineaId = (int)$stmtLinea->fetchColumn();
+    } else {
+        $lineaId = isset($_GET['linea_id']) ? (int)$_GET['linea_id'] : (int)($_SESSION['linea_id'] ?? 0);
+    }
+
+    if ($lineaId <= 0) {
+        echo json_encode(['success' => false, 'error' => 'Línea no asignada o inválida.']);
+        exit;
+    }
+
+    $fechaDesde = $_GET['desde'] ?? date('Y-m-d', strtotime('-7 days'));
+    $fechaHasta = $_GET['hasta'] ?? date('Y-m-d');
+
     $reporte = [
         'fecha_inicio' => $fechaDesde,
         'fecha_fin' => $fechaHasta,
@@ -57,7 +72,7 @@ try {
         $stmt->execute([$lineaId, $fechaDesde, $fechaHasta]);
         $egresos = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
     } catch (Exception $e) {
-        // Si la tabla no existe aún, ignoramos
+        // Ignorar si la tabla aún no tiene datos
     }
 
     // Unificar datos para el gráfico
@@ -88,6 +103,7 @@ try {
     echo json_encode(['success' => true, 'reporte' => $reporte]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => 'Error de BD: ' . $e->getMessage()]);
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Error de base de datos.']);
 }
 ?>

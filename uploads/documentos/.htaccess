@@ -1,0 +1,24 @@
+# DIGITAL TRANSPORT - PROTECCIÓN DE SUBIDAS (UPLOADS SECURITY)
+# Desactivar ejecución de scripts PHP y CGI en la carpeta de documentos subidos
+
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+
+# Bloquear ejecución de cualquier script binario o interpretado
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .phps .cgi .pl .py .exe
+SetHandler default-handler
+
+# Permitir lectura solo de imágenes y PDFs
+<FilesMatch "\.(png|jpe?g|pdf)$">
+    Order allow,deny
+    Allow from all
+</FilesMatch>
+
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|phps|cgi|pl|py|exe|sh)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

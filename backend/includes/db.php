@@ -1,10 +1,5 @@
 <?php
-/**
- * DIGITAL TRANSPORT - PDO DATABASE WRAPPER
- * 
- * Este archivo centraliza la conexión a la base de datos utilizando PDO
- * para mayor seguridad y flexibilidad, con soporte para variables de entorno.
- */
+require_once __DIR__ . '/security.php';
 
 // Helper para cargar archivo .env si existe
 if (!function_exists('loadEnv')) {

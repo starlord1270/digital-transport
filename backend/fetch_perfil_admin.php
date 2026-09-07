@@ -1,10 +1,9 @@
 <?php
-// backend/fetch-perfil-admin.php
+// backend/fetch_perfil_admin.php
 
 header('Content-Type: application/json');
-session_start();
+require_once __DIR__ . '/includes/db.php';
 
-// Inicialización de la respuesta con un error genérico (mejorado)
 $response = [
     'success' => false,
     'message' => 'Error desconocido en el servidor.',
@@ -17,141 +16,81 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
     echo json_encode($response);
     exit;
 }
-// El ID 4 corresponde a ADMIN_LINEA (Ver tabla TIPO_USUARIO)
-if ($_SESSION['tipo_usuario_id'] != 4) {
+if (!in_array((int)$_SESSION['tipo_usuario_id'], [4, 5], true)) {
     $response['message'] = 'No tienes permisos de Administrador de Línea.';
     echo json_encode($response);
     exit;
 }
 
-$usuario_id = $_SESSION['usuario_id'];
+$usuario_id = (int)$_SESSION['usuario_id'];
 
-// 2. Conexión a la base de datos
-// *Asegúrate que 'bd.php' esté en el mismo directorio (backend/).
-require_once 'bd.php'; 
+try {
+    // 2. Consulta Principal: Datos del Administrador y Línea
+    $sql_datos_admin = "
+        SELECT 
+            U.nombre_completo, 
+            U.documento_identidad, 
+            U.email, 
+            U.fecha_registro,
+            AL.linea_id, 
+            L.nombre AS nombre_linea
+        FROM 
+            USUARIO U
+        JOIN 
+            ADMIN_LINEA AL ON U.usuario_id = AL.usuario_id
+        JOIN 
+            LINEA L ON AL.linea_id = L.linea_id
+        WHERE 
+            U.usuario_id = :uid
+    ";
 
-if ($conn->connect_error) {
-    // Mensaje de error más detallado de conexión
-    $response['message'] = 'Error grave de conexión a la base de datos. Código: ' . $conn->connect_errno;
+    $stmt_admin = $pdo->prepare($sql_datos_admin);
+    $stmt_admin->execute([':uid' => $usuario_id]);
+    $datos_admin = $stmt_admin->fetch(PDO::FETCH_ASSOC);
+
+    if (!$datos_admin) {
+        $response['message'] = 'Error: Administrador encontrado pero sin asignación de línea.';
+        echo json_encode($response);
+        exit;
+    }
+
+    $linea_id = (int)$datos_admin['linea_id'];
+
+    // 3. Consulta de Conteo: Choferes por Línea
+    $stmt_choferes = $pdo->prepare("SELECT COUNT(chofer_id) AS total_choferes FROM CHOFER WHERE linea_id = :lid");
+    $stmt_choferes->execute([':lid' => $linea_id]);
+    $conteo_choferes = (int)$stmt_choferes->fetchColumn();
+
+    // 4. Consulta de Conteo: Vehículos por Línea
+    $stmt_vehiculos = $pdo->prepare("SELECT COUNT(placa) AS total_vehiculos FROM VEHICULO WHERE linea_id = :lid AND placa != 'PENDIENTE'");
+    $stmt_vehiculos->execute([':lid' => $linea_id]);
+    $conteo_vehiculos = (int)$stmt_vehiculos->fetchColumn();
+
+    // 5. Formato Final y Respuesta Exitosa
+    $fecha_registro = DateTime::createFromFormat('Y-m-d H:i:s', $datos_admin['fecha_registro']);
+    $monthNames = [
+        'January' => 'Enero', 'February' => 'Febrero', 'March' => 'Marzo', 'April' => 'Abril',
+        'May' => 'Mayo', 'June' => 'Junio', 'July' => 'Julio', 'August' => 'Agosto',
+        'September' => 'Septiembre', 'October' => 'Octubre', 'November' => 'Noviembre', 'December' => 'Diciembre'
+    ];
+    $fecha_formateada = $fecha_registro ? strtr($fecha_registro->format('F Y'), $monthNames) : 'Fecha desconocida';
+
+    $response['success'] = true;
+    $response['message'] = 'Datos del perfil cargados correctamente.';
+    $response['data'] = [
+        'nombre_completo' => $datos_admin['nombre_completo'],
+        'documento_identidad' => $datos_admin['documento_identidad'] . ' LP', 
+        'email' => $datos_admin['email'],
+        'telefono' => '+591 76543210',
+        'linea_administrada' => $datos_admin['nombre_linea'],
+        'miembro_desde' => $fecha_formateada,
+        'total_choferes' => $conteo_choferes,
+        'total_vehiculos' => $conteo_vehiculos
+    ];
+
     echo json_encode($response);
-    exit;
+} catch (PDOException $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Error de base de datos.']);
 }
-
-// 3. Consulta Principal: Datos del Administrador y Línea
-// Une USUARIO, ADMIN_LINEA y LINEA
-$sql_datos_admin = "
-    SELECT 
-        U.nombre_completo, 
-        U.documento_identidad, 
-        U.email, 
-        U.fecha_registro,
-        AL.linea_id, 
-        L.nombre AS nombre_linea
-    FROM 
-        USUARIO U
-    JOIN 
-        ADMIN_LINEA AL ON U.usuario_id = AL.usuario_id
-    JOIN 
-        LINEA L ON AL.linea_id = L.linea_id
-    WHERE 
-        U.usuario_id = ?
-";
-
-$stmt_admin = $conn->prepare($sql_datos_admin);
-
-// ⭐ DEBUG: Captura errores de SQL al preparar
-if ($stmt_admin === false) {
-    $response['message'] = 'Error al preparar la consulta de datos del administrador: ' . $conn->error;
-    $conn->close();
-    echo json_encode($response);
-    exit;
-}
-
-$stmt_admin->bind_param("i", $usuario_id);
-$stmt_admin->execute();
-$result_admin = $stmt_admin->get_result();
-$datos_admin = $result_admin->fetch_assoc();
-$stmt_admin->close();
-
-if (!$datos_admin) {
-    // Esto ocurre si el usuario está en la sesión, pero no existe en la tabla ADMIN_LINEA.
-    $response['message'] = 'Error: Administrador encontrado pero sin asignación de línea. ID de Sesión: ' . $usuario_id;
-    $conn->close();
-    echo json_encode($response);
-    exit;
-}
-
-$linea_id = $datos_admin['linea_id'];
-
-// 4. Consulta de Conteo: Choferes por Línea
-$sql_choferes = "
-    SELECT 
-        COUNT(C.chofer_id) AS total_choferes
-    FROM 
-        CHOFER C
-    WHERE 
-        C.linea_id = ?
-";
-$stmt_choferes = $conn->prepare($sql_choferes);
-if ($stmt_choferes === false) {
-    $response['message'] = 'Error al preparar la consulta de choferes: ' . $conn->error;
-    $conn->close();
-    echo json_encode($response);
-    exit;
-}
-$stmt_choferes->bind_param("i", $linea_id);
-$stmt_choferes->execute();
-$result_choferes = $stmt_choferes->get_result();
-$conteo_choferes = $result_choferes->fetch_assoc()['total_choferes'];
-$stmt_choferes->close();
-
-
-// 5. Consulta de Conteo: Vehículos por Línea
-$sql_vehiculos = "
-    SELECT 
-        COUNT(V.placa) AS total_vehiculos
-    FROM 
-        VEHICULO V
-    WHERE 
-        V.linea_id = ? AND V.placa != 'PENDIENTE'
-";
-$stmt_vehiculos = $conn->prepare($sql_vehiculos);
-if ($stmt_vehiculos === false) {
-    $response['message'] = 'Error al preparar la consulta de vehículos: ' . $conn->error;
-    $conn->close();
-    echo json_encode($response);
-    exit;
-}
-$stmt_vehiculos->bind_param("i", $linea_id);
-$stmt_vehiculos->execute();
-$result_vehiculos = $stmt_vehiculos->get_result();
-$conteo_vehiculos = $result_vehiculos->fetch_assoc()['total_vehiculos'];
-$stmt_vehiculos->close();
-
-
-// 6. Formato Final y Respuesta Exitosa
-// Usamos DateTime para formatear la fecha a 'Mes Año'
-$fecha_registro = DateTime::createFromFormat('Y-m-d H:i:s', $datos_admin['fecha_registro']);
-$monthNames = [
-    'January' => 'Enero', 'February' => 'Febrero', 'March' => 'Marzo', 'April' => 'Abril',
-    'May' => 'Mayo', 'June' => 'Junio', 'July' => 'Julio', 'August' => 'Agosto',
-    'September' => 'Septiembre', 'October' => 'Octubre', 'November' => 'Noviembre', 'December' => 'Diciembre'
-];
-$fecha_formateada = $fecha_registro ? strtr($fecha_registro->format('F Y'), $monthNames) : 'Fecha desconocida'; 
-
-$response['success'] = true;
-$response['message'] = 'Datos del perfil cargados correctamente.';
-$response['data'] = [
-    'nombre_completo' => $datos_admin['nombre_completo'],
-    'documento_identidad' => $datos_admin['documento_identidad'] . ' LP', 
-    'email' => $datos_admin['email'],
-    'telefono' => '+591 76543210', // Valor estático para simular el diseño
-    'linea_administrada' => $datos_admin['nombre_linea'],
-    'miembro_desde' => $fecha_formateada,
-    'total_choferes' => $conteo_choferes,
-    'total_vehiculos' => $conteo_vehiculos
-];
-
-$conn->close();
-echo json_encode($response);
 ?>
